@@ -1,24 +1,40 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useFonts } from "@expo-google-fonts/righteous/useFonts";
+import { Righteous_400Regular } from "@expo-google-fonts/righteous/400Regular";
+import { Stack } from "expo-router";
+import { useEffect } from "react";
+import { View } from "react-native";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { SystemBars } from "react-native-edge-to-edge";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import ConvexClientProvider from "../../ConvexClientProvider";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const [loaded, error] = useFonts({
+    Righteous_400Regular,
+  });
+
+  useEffect(() => {
+    if (error) {
+      console.warn("Font loading error:", error);
+    }
+  }, [error]);
+
+  if (!loaded && !error) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <SystemBars style="dark" />
+        <ConvexClientProvider>
+          <BottomSheetModalProvider>
+            <View style={{ flex: 1 }}>
+              <Stack screenOptions={{ headerShown: false }} />
+            </View>
+          </BottomSheetModalProvider>
+        </ConvexClientProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
