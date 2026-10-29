@@ -49,6 +49,8 @@ type OnboardingAnswers = {
   otherConsultation: string;
   heightCm: string;
   weightKg: string;
+  heightUnit: "cm" | "m" | "ft";
+  weightUnit: "kg" | "lb";
 };
 
 const initialAnswers: OnboardingAnswers = {
@@ -66,6 +68,8 @@ const initialAnswers: OnboardingAnswers = {
   otherConsultation: "",
   heightCm: "",
   weightKg: "",
+  heightUnit: "cm",
+  weightUnit: "kg",
 };
 
 const secureProfileKey = "trinity-onboarding-profile";
@@ -94,9 +98,19 @@ export default function OnboardingScreen() {
     answers.audience === "myself" &&
     ["age18to39", "age40to59", "age60plus"].includes(answers.age) &&
     !answers.support.includes("pregnancy");
+  const heightInCm =
+    answers.heightUnit === "cm"
+      ? Number(answers.heightCm)
+      : answers.heightUnit === "m"
+        ? Number(answers.heightCm) * 100
+        : Number(answers.heightCm) * 30.48;
+  const weightInKg =
+    answers.weightUnit === "kg"
+      ? Number(answers.weightKg)
+      : Number(answers.weightKg) * 0.45359237;
   const bmi =
     canCalculateBmi && answers.heightCm.trim() && answers.weightKg.trim()
-      ? calculateBmi(Number(answers.heightCm), Number(answers.weightKg))
+      ? calculateBmi(heightInCm, weightInKg)
       : null;
 
   useEffect(() => {
@@ -120,6 +134,8 @@ export default function OnboardingScreen() {
       otherConsultation: savedProfile.otherConsultation ?? "",
       heightCm: savedProfile.heightCm?.toString() ?? "",
       weightKg: savedProfile.weightKg?.toString() ?? "",
+      heightUnit: "cm",
+      weightUnit: "kg",
     });
   }, [savedProfile, profileLoaded, step]);
 
@@ -178,8 +194,8 @@ export default function OnboardingScreen() {
             otherConsultation: answers.otherConsultation,
             ...(bmi !== null
               ? {
-                  heightCm: Number(answers.heightCm),
-                  weightKg: Number(answers.weightKg),
+                  heightCm: heightInCm,
+                  weightKg: weightInKg,
                 }
               : {}),
           });
@@ -411,33 +427,115 @@ export default function OnboardingScreen() {
                 <View style={styles.measurementsRow}>
                   <View style={styles.measurementField}>
                     <Text style={styles.sectionLabel}>{copy.height}</Text>
-                    <TextInput
-                      accessibilityLabel={copy.height}
-                      keyboardType="decimal-pad"
-                      maxLength={5}
-                      onChangeText={(value) =>
-                        update("heightCm", sanitizeMeasurement(value))
-                      }
-                      placeholder="165"
-                      placeholderTextColor="#94A297"
-                      style={styles.measurementInput}
-                      value={answers.heightCm}
-                    />
+                    <View style={styles.measurementInputRow}>
+                      <TextInput
+                        accessibilityLabel={copy.height}
+                        keyboardType="decimal-pad"
+                        maxLength={6}
+                        onChangeText={(value) =>
+                          update("heightCm", sanitizeMeasurement(value))
+                        }
+                        placeholder={
+                          answers.heightUnit === "cm"
+                            ? "165"
+                            : answers.heightUnit === "m"
+                              ? "1.65"
+                              : "5.4"
+                        }
+                        placeholderTextColor="#94A297"
+                        style={styles.measurementInput}
+                        value={answers.heightCm}
+                      />
+                      <View style={styles.unitToggleGroup}>
+                        {(["cm", "m", "ft"] as const).map((unit) => (
+                          <Pressable
+                            key={unit}
+                            accessibilityRole="button"
+                            onPress={() => {
+                              if (answers.heightUnit === unit) return;
+                              const currentCm =
+                                answers.heightUnit === "cm"
+                                  ? Number(answers.heightCm)
+                                  : answers.heightUnit === "m"
+                                    ? Number(answers.heightCm) * 100
+                                    : Number(answers.heightCm) * 30.48;
+                              const converted =
+                                unit === "cm"
+                                  ? currentCm
+                                  : unit === "m"
+                                    ? currentCm / 100
+                                    : currentCm / 30.48;
+                              update("heightCm", sanitizeMeasurement(converted.toFixed(2).replace(/\.?0+$/, "")));
+                              update("heightUnit", unit);
+                            }}
+                            style={[
+                              styles.unitToggle,
+                              answers.heightUnit === unit && styles.unitToggleActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.unitToggleText,
+                                answers.heightUnit === unit && styles.unitToggleTextActive,
+                              ]}
+                            >
+                              {unit}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
                   </View>
                   <View style={styles.measurementField}>
                     <Text style={styles.sectionLabel}>{copy.weight}</Text>
-                    <TextInput
-                      accessibilityLabel={copy.weight}
-                      keyboardType="decimal-pad"
-                      maxLength={5}
-                      onChangeText={(value) =>
-                        update("weightKg", sanitizeMeasurement(value))
-                      }
-                      placeholder="65"
-                      placeholderTextColor="#94A297"
-                      style={styles.measurementInput}
-                      value={answers.weightKg}
-                    />
+                    <View style={styles.measurementInputRow}>
+                      <TextInput
+                        accessibilityLabel={copy.weight}
+                        keyboardType="decimal-pad"
+                        maxLength={6}
+                        onChangeText={(value) =>
+                          update("weightKg", sanitizeMeasurement(value))
+                        }
+                        placeholder={answers.weightUnit === "kg" ? "65" : "143"}
+                        placeholderTextColor="#94A297"
+                        style={styles.measurementInput}
+                        value={answers.weightKg}
+                      />
+                      <View style={styles.unitToggleGroup}>
+                        {(["kg", "lb"] as const).map((unit) => (
+                          <Pressable
+                            key={unit}
+                            accessibilityRole="button"
+                            onPress={() => {
+                              if (answers.weightUnit === unit) return;
+                              const currentKg =
+                                answers.weightUnit === "kg"
+                                  ? Number(answers.weightKg)
+                                  : Number(answers.weightKg) * 0.45359237;
+                              const converted =
+                                unit === "kg"
+                                  ? currentKg
+                                  : currentKg / 0.45359237;
+                              update("weightKg", sanitizeMeasurement(converted.toFixed(2).replace(/\.?0+$/, "")));
+                              update("weightUnit", unit);
+                            }}
+                            style={[
+                              styles.unitToggle,
+                              answers.weightUnit === unit && styles.unitToggleActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.unitToggleText,
+                                answers.weightUnit === unit && styles.unitToggleTextActive,
+                              ]}
+                            >
+                              {unit}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
                   </View>
                 </View>
                 <View style={styles.bmiCard}>
@@ -799,6 +897,7 @@ const styles = StyleSheet.create({
   },
   measurementsRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   measurementField: { flex: 1 },
+  measurementInputRow: { flexDirection: "row", gap: 6, alignItems: "center" },
   measurementInput: {
     backgroundColor: "#FFFFFF",
     borderColor: "#DFE8DF",
@@ -809,7 +908,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     minHeight: 45,
     paddingHorizontal: 12,
+    flex: 1,
   },
+  unitToggleGroup: { flexDirection: "row", gap: 4 },
+  unitToggle: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#DFE8DF",
+    borderRadius: 8,
+    borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 45,
+    paddingHorizontal: 8,
+  },
+  unitToggleActive: {
+    backgroundColor: "#EEF7F0",
+    borderColor: "#29804A",
+  },
+  unitToggleText: {
+    color: "#55705D",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+  },
+  unitToggleTextActive: { color: "#29804A" },
   bmiCard: {
     backgroundColor: "#FFFFFF",
     borderColor: "#DCE8DD",
