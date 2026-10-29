@@ -5,7 +5,6 @@ import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { View } from "react-native";
 import { SystemBars } from "react-native-edge-to-edge";
-import "react-native-gesture-handler";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import ConvexClientProvider from "./ConvexClientProvider";
@@ -15,11 +14,6 @@ export default function RootLayout() {
     Righteous_400Regular,
   });
 
-  useEffect(() => {
-    if (error) {
-      console.warn("Font loading error:", error);
-    }
-  }, [error]);
 
   if (!loaded && !error) return null;
 
