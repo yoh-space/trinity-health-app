@@ -1,367 +1,539 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery } from "convex/react";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { GuestChoiceChip } from "../components/public/GuestChoiceChip";
+import { api } from "../convex/_generated/api";
 import { useTrinityStore } from "../store/useTrinityStore";
+
+type RequestType = "clinical" | "counselling";
+type ContactMethod = "email" | "phone";
+
+const copy = {
+  en: {
+    eyebrow: "TRINITY CARE",
+    title: "Request care support",
+    subtitle: "Choose the kind of support and tell us how to contact you.",
+    requestType: "What kind of support are you looking for?",
+    clinical: "Clinical health support",
+    clinicalHint: "A health concern or nutrition-related support",
+    counselling: "Counselling support",
+    counsellingHint: "Emotional wellbeing or someone to talk to",
+    contactMethod: "How should we contact you?",
+    email: "Email",
+    phone: "Phone",
+    contactEmail: "Email address",
+    contactPhone: "Phone number",
+    emailPlaceholder: "you@example.com",
+    phonePlaceholder: "+251 ...",
+    summary: "Briefly, what support are you seeking? (optional)",
+    summaryPlaceholder: "Keep this general. Do not include diagnoses, medicines, or urgent details.",
+    consent: "I agree to send and store my contact details and request with Trinity for possible follow-up.",
+    submit: "Submit care request",
+    submitting: "Submitting…",
+    invalidContact: "Enter a valid email address or phone number.",
+    consentRequired: "Please agree to share this information before submitting.",
+    failedTitle: "Could not submit request",
+    failedBody: "Check your connection and try again. Your request has not been confirmed.",
+    safetyTitle: "Not for emergencies",
+    safetyBody: "This form is not continuously monitored and cannot provide urgent care. If you may be in immediate danger or need urgent help, contact local emergency services or go to a health facility.",
+    serviceNoticeTitle: "Please note",
+    serviceNoticeBody: "Submitting saves a request to your account. It does not book or confirm an appointment, and a response time or follow-up is not guaranteed. The staff review and scheduling workflow is not yet connected in this app.",
+    successTitle: "Request saved",
+    successBody: "Your request has been recorded in your account. No appointment has been booked.",
+    reference: "Reference",
+    newRequest: "Send another request",
+    myRequests: "Your recent requests",
+    submitted: "Submitted",
+    inReview: "In review",
+    contacted: "Contacted",
+    closed: "Closed",
+    noRequests: "No requests submitted yet.",
+    askOpal: "Need general learning instead?",
+    openLearning: "Browse learning",
+    date: "Created",
+  },
+  am: {
+    eyebrow: "ትሪኒቲ እንክብካቤ",
+    title: "የእንክብካቤ ድጋፍ ይጠይቁ",
+    subtitle: "የሚፈልጉትን ድጋፍ ይምረጡና እንዴት እንደምንገናኝዎ ይንገሩን።",
+    requestType: "ምን ዓይነት ድጋፍ ይፈልጋሉ?",
+    clinical: "የጤና ባለሙያ ድጋፍ",
+    clinicalHint: "የጤና ጉዳይ ወይም ከአመጋገብ ጋር የተያያዘ ድጋፍ",
+    counselling: "የምክር ድጋፍ",
+    counsellingHint: "ስሜታዊ ደህንነት ወይም ማነጋገር",
+    contactMethod: "እንዴት እንገናኝዎ?",
+    email: "ኢሜይል",
+    phone: "ስልክ",
+    contactEmail: "የኢሜይል አድራሻ",
+    contactPhone: "ስልክ ቁጥር",
+    emailPlaceholder: "you@example.com",
+    phonePlaceholder: "+251 ...",
+    summary: "በአጭሩ ምን ዓይነት ድጋፍ ይፈልጋሉ? (አማራጭ)",
+    summaryPlaceholder: "አጠቃላይ ጉዳይ ብቻ ይጻፉ። ምርመራ፣ መድኃኒት ወይም አስቸኳይ ዝርዝር አያካትቱ።",
+    consent: "የመገናኛ ዝርዝሬንና ጥያቄዬን ለተጨማሪ እርምጃ ከትሪኒቲ ጋር ለመላክና ለማስቀመጥ እስማማለሁ።",
+    submit: "የእንክብካቤ ጥያቄ ላክ",
+    submitting: "በመላክ ላይ…",
+    invalidContact: "ትክክለኛ ኢሜይል ወይም ስልክ ቁጥር ያስገቡ።",
+    consentRequired: "ከመላክዎ በፊት ይህን መረጃ ለማጋራት ፈቃድ ይስጡ።",
+    failedTitle: "ጥያቄውን መላክ አልተቻለም",
+    failedBody: "የኢንተርኔት ግንኙነትዎን ያረጋግጡና እንደገና ይሞክሩ። ጥያቄዎ አልተረጋገጠም።",
+    safetyTitle: "ለአስቸኳይ ሁኔታ አይደለም",
+    safetyBody: "ይህ ቅጽ በቀጣይነት አይታይም፣ አስቸኳይ እርዳታም አይሰጥም። በአስቸኳይ አደጋ ላይ ከሆኑ የአካባቢዎን የአደጋ ጊዜ አገልግሎት ያነጋግሩ ወይም ወደ ጤና ተቋም ይሂዱ።",
+    serviceNoticeTitle: "እባክዎ ያስተውሉ",
+    serviceNoticeBody: "ሲልኩ ጥያቄው በመለያዎ ይቀመጣል። ቀጠሮ አይያዝም፤ ምላሽ ወይም ተጨማሪ እርምጃ የተረጋገጠ አይደለም። የሰራተኛ ግምገማና ቀጠሮ ስርዓት በዚህ መተግበሪያ ገና አልተገናኘም።",
+    successTitle: "ጥያቄው ተቀምጧል",
+    successBody: "ጥያቄዎ በመለያዎ ተመዝግቧል። ቀጠሮ አልተያዘም።",
+    reference: "የመለያ ቁጥር",
+    newRequest: "ሌላ ጥያቄ ላክ",
+    myRequests: "የቅርብ ጊዜ ጥያቄዎችዎ",
+    submitted: "ተልኳል",
+    inReview: "በግምገማ ላይ",
+    contacted: "ተገናኝተዋል",
+    closed: "ተዘግቷል",
+    noRequests: "እስካሁን ምንም ጥያቄ አልተላከም።",
+    askOpal: "አጠቃላይ ትምህርት ይፈልጋሉ?",
+    openLearning: "ትምህርቶችን ይመልከቱ",
+    date: "የተፈጠረበት",
+  },
+} as const;
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isValidPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15;
+}
 
 export default function CareRequestScreen() {
   const router = useRouter();
   const language = useTrinityStore((state) => state.language);
-  const am = language === "am";
-  const [supportType, setSupportType] = useState("family");
-  const [format, setFormat] = useState<"online" | "inPerson">("online");
-  const [acknowledged, setAcknowledged] = useState(false);
-  const [previewCreated, setPreviewCreated] = useState(false);
+  const t = copy[language];
+  const requests = useQuery(api.careRequests.listMine);
+  const createRequest = useMutation(api.careRequests.create);
+  const [requestType, setRequestType] = useState<RequestType>("clinical");
+  const [contactMethod, setContactMethod] = useState<ContactMethod>("email");
+  const [contactDetails, setContactDetails] = useState("");
+  const [requestSummary, setRequestSummary] = useState("");
+  const [consented, setConsented] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedId, setSubmittedId] = useState<string | null>(null);
 
-  const submitDemo = () => {
-    setPreviewCreated(true);
-    Alert.alert(
-      am ? "የሙከራ ቅጽ" : "Demo request",
-      am
-        ? "ምንም አልተላከም፣ ቀጠሮም አልተያዘም። ይህ ባህሪ የሙከራ ብቻ ነው።"
-        : "Nothing was sent and no appointment was booked. This is a demo only.",
-    );
+  const contactValid =
+    contactMethod === "email"
+      ? isValidEmail(contactDetails)
+      : isValidPhone(contactDetails);
+
+  const submitRequest = async () => {
+    if (!contactValid) {
+      Alert.alert(t.invalidContact);
+      return;
+    }
+    if (!consented) {
+      Alert.alert(t.consentRequired);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const id = await createRequest({
+        consent: true,
+        requestType,
+        contactMethod,
+        contactDetails: contactDetails.trim(),
+        ...(requestSummary.trim()
+          ? { requestSummary: requestSummary.trim() }
+          : {}),
+      });
+      setSubmittedId(String(id));
+    } catch (error) {
+      console.error("Care request submission failed.", error);
+      Alert.alert(t.failedTitle, t.failedBody);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const serviceTypes = [
-    {
-      id: "family",
-      en: "General family nutrition",
-      am: "አጠቃላይ የቤተሰብ አመጋገብ",
-    },
-    {
-      id: "maternal",
-      en: "Pregnancy and breastfeeding nutrition",
-      am: "የእርግዝና እና ጡት ማጥባት አመጋገብ",
-    },
-    {
-      id: "child",
-      en: "Complementary feeding for young children",
-      am: "የታዳጊ ህፃናት ተጨማሪ ምግብ",
-    },
-  ];
+  const resetForm = () => {
+    setSubmittedId(null);
+    setRequestType("clinical");
+    setContactMethod("email");
+    setContactDetails("");
+    setRequestSummary("");
+    setConsented(false);
+  };
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardView}
       >
-        <Text style={styles.eyebrow}>
-          {am ? "እንክብካቤ፣ ከእርስዎ ጋር" : "CARE, ALONGSIDE YOU"}
-        </Text>
-        <Text style={styles.title}>
-          {am ? "ትንሽ ተጨማሪ ድጋፍ" : "A little extra support"}
-        </Text>
-        <Text style={styles.subtitle}>
-          {am
-            ? "ለወደፊት አገልግሎት የተዘጋጀ የሙከራ ቅጽ።"
-            : "A demo request form for a future service."}
-        </Text>
-
-        <View style={styles.demoNotice}>
-          <View style={styles.noticeIcon}>
-            <Ionicons
-              name="information-circle-outline"
-              size={20}
-              color="#2E7846"
-            />
-          </View>
-          <View style={styles.noticeCopy}>
-            <Text style={styles.noticeTitle}>
-              {am ? "የሙከራ ጥያቄ ብቻ" : "Demo request only"}
-            </Text>
-            <Text style={styles.noticeText}>
-              {am
-                ? "ምንም አይላክም፣ ምንም ቀጠሮ አይያዝም። ከባለሙያ ጋር አይገናኙም።"
-                : "Nothing will be sent and no appointment will be booked."}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            {am ? "01 የድጋፍ አይነት" : "01  Type of support"}
-          </Text>
-          <View style={styles.choiceList}>
-            {serviceTypes.map((item) => (
-              <GuestChoiceChip
-                key={item.id}
-                role="radio"
-                label={am ? item.am : item.en}
-                selected={supportType === item.id}
-                onPress={() => setSupportType(item.id)}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            {am ? "02 የመገናኛ መንገድ" : "02  Preferred format"}
-          </Text>
-          <View style={styles.choiceList}>
-            <GuestChoiceChip
-              role="radio"
-              label={am ? "በኢንተርኔት" : "Online"}
-              selected={format === "online"}
-              onPress={() => setFormat("online")}
-            />
-            <GuestChoiceChip
-              role="radio"
-              label={am ? "በአካል" : "In person"}
-              selected={format === "inPerson"}
-              onPress={() => setFormat("inPerson")}
-            />
-          </View>
-        </View>
-
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: acknowledged }}
-          onPress={() => setAcknowledged((current) => !current)}
-          style={styles.acknowledgment}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View
-            style={[styles.checkbox, acknowledged && styles.checkboxChecked]}
-          >
-            {acknowledged && (
-              <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+          <Text style={styles.eyebrow}>{t.eyebrow}</Text>
+          <Text style={styles.title}>{t.title}</Text>
+          <Text style={styles.subtitle}>{t.subtitle}</Text>
+
+          <Notice
+            icon="alert-circle-outline"
+            title={t.safetyTitle}
+            body={t.safetyBody}
+            tone="urgent"
+          />
+          <Notice
+            icon="information-circle-outline"
+            title={t.serviceNoticeTitle}
+            body={t.serviceNoticeBody}
+          />
+
+          {submittedId ? (
+            <View style={styles.successCard} accessibilityRole="alert">
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={26}
+                color="#247640"
+              />
+              <Text style={styles.successTitle}>{t.successTitle}</Text>
+              <Text style={styles.successText}>{t.successBody}</Text>
+              <Text style={styles.referenceLabel}>{t.reference}</Text>
+              <Text selectable style={styles.referenceValue}>
+                {submittedId}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={resetForm}
+                style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.secondaryButtonText}>{t.newRequest}</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.sectionTitle}>{t.requestType}</Text>
+              <View style={styles.choiceGroup} accessibilityRole="radiogroup">
+                <ChoiceCard
+                  selected={requestType === "clinical"}
+                  icon="medkit-outline"
+                  title={t.clinical}
+                  hint={t.clinicalHint}
+                  onPress={() => setRequestType("clinical")}
+                />
+                <ChoiceCard
+                  selected={requestType === "counselling"}
+                  icon="chatbubbles-outline"
+                  title={t.counselling}
+                  hint={t.counsellingHint}
+                  onPress={() => setRequestType("counselling")}
+                />
+              </View>
+
+              <Text style={styles.sectionTitle}>{t.contactMethod}</Text>
+              <View style={styles.methodRow}>
+                {(["email", "phone"] as const).map((method) => {
+                  const active = method === contactMethod;
+                  return (
+                    <Pressable
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: active }}
+                      key={method}
+                      onPress={() => {
+                        if (method !== contactMethod) {
+                          setContactDetails("");
+                          setContactMethod(method);
+                        }
+                      }}
+                      style={[styles.methodButton, active && styles.methodActive]}
+                    >
+                      <Ionicons
+                        name={method === "email" ? "mail-outline" : "call-outline"}
+                        size={17}
+                        color={active ? "#087A3D" : "#6F7F73"}
+                      />
+                      <Text style={[styles.methodText, active && styles.methodTextActive]}>
+                        {method === "email" ? t.email : t.phone}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.inputLabel}>
+                {contactMethod === "email" ? t.contactEmail : t.contactPhone}
+              </Text>
+              <TextInput
+                accessibilityLabel={contactMethod === "email" ? t.contactEmail : t.contactPhone}
+                autoCapitalize="none"
+                autoComplete={contactMethod === "email" ? "email" : "tel"}
+                keyboardType={contactMethod === "email" ? "email-address" : "phone-pad"}
+                maxLength={254}
+                onChangeText={setContactDetails}
+                placeholder={contactMethod === "email" ? t.emailPlaceholder : t.phonePlaceholder}
+                placeholderTextColor="#8B9A8E"
+                style={styles.input}
+                textContentType={contactMethod === "email" ? "emailAddress" : "telephoneNumber"}
+                value={contactDetails}
+              />
+
+              <Text style={styles.inputLabel}>{t.summary}</Text>
+              <TextInput
+                accessibilityLabel={t.summary}
+                maxLength={500}
+                multiline
+                onChangeText={setRequestSummary}
+                placeholder={t.summaryPlaceholder}
+                placeholderTextColor="#8B9A8E"
+                style={[styles.input, styles.summaryInput]}
+                textAlignVertical="top"
+                value={requestSummary}
+              />
+              <Text style={styles.characterCount}>{requestSummary.length}/500</Text>
+
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: consented }}
+                onPress={() => setConsented((current) => !current)}
+                style={styles.consentRow}
+              >
+                <View style={[styles.checkbox, consented && styles.checkboxSelected]}>
+                  {consented && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                </View>
+                <Text style={styles.consentText}>{t.consent}</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !consented || !contactValid || isSubmitting }}
+                disabled={!consented || !contactValid || isSubmitting}
+                onPress={() => void submitRequest()}
+                style={({ pressed }) => [
+                  styles.submitButton,
+                  (!consented || !contactValid || isSubmitting) && styles.submitDisabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.submitText}>
+                  {isSubmitting ? t.submitting : t.submit}
+                </Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </Pressable>
+            </>
+          )}
+
+          <View style={styles.requestsSection}>
+            <Text style={styles.sectionTitle}>{t.myRequests}</Text>
+            {!requests?.length ? (
+              <Text style={styles.emptyRequests}>{t.noRequests}</Text>
+            ) : (
+              requests.map((request) => (
+                <View key={request._id} style={styles.requestCard}>
+                  <View style={styles.requestTopRow}>
+                    <Text style={styles.requestType}>
+                      {request.requestType === "clinical" ? t.clinical : t.counselling}
+                    </Text>
+                    <Text style={styles.requestStatus}>
+                      {t[request.status]}
+                    </Text>
+                  </View>
+                  <Text style={styles.requestReference}>
+                    {t.reference}: {request._id}
+                  </Text>
+                  <Text style={styles.requestDate}>
+                    {t.date}: {new Date(request.createdAt).toLocaleDateString(language === "am" ? "am-ET" : "en-US")}
+                  </Text>
+                </View>
+              ))
             )}
           </View>
-          <Text style={styles.acknowledgmentText}>
-            {am
-              ? "ይህ የሙከራ ጥያቄ ብቻ መሆኑን ተረድቻለሁ። ምንም አይላክም ወይም አይያዝም።"
-              : "I understand this is a demo only. Nothing will be sent or booked."}
-          </Text>
-        </Pressable>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !acknowledged }}
-          disabled={!acknowledged}
-          onPress={submitDemo}
-          style={({ pressed }) => [
-            styles.submit,
-            !acknowledged && styles.submitDisabled,
-            pressed && acknowledged && styles.submitPressed,
-          ]}
-        >
-          <Text style={styles.submitText}>
-            {am ? "የሙከራ ጥያቄ ፍጠር" : "Create demo request"}
-          </Text>
-          <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
-        </Pressable>
-
-        {previewCreated && (
-          <View style={styles.previewResult} accessibilityRole="alert">
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={20}
-              color="#8A641A"
-            />
-            <View style={styles.previewResultCopy}>
-              <Text style={styles.previewResultTitle}>
-                {am ? "የሙከራ ጥያቄ ተፈጥሯል" : "Preview created — not sent"}
-              </Text>
-              <Text style={styles.previewResultText}>
-                {am
-                  ? "ይህ በመሣሪያዎ ላይ የሚታይ ማሳያ ብቻ ነው። ለባለሙያ አልተላከም፣ ቀጠሮም አልተያዘም።"
-                  : "This is a local preview only. Nothing was sent to a professional and no appointment was booked."}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.safetyNotice}>
-          <Ionicons name="shield-checkmark-outline" size={16} color="#558262" />
-          <Text style={styles.safetyText}>
-            {am
-              ? "ስም፣ ስልክ፣ አድራሻ ወይም የጤና ዝርዝር አንጠይቅም። ለአስቸኳይ እርዳታ የጤና ተቋምን በቀጥታ ያነጋግሩ።"
-              : "We do not ask for names, phone numbers, addresses, or health details. For urgent help, contact a local health service directly."}
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() =>
-            Alert.alert(
-              am ? "ኦፓልን ይጠይቁ" : "Ask Opal",
-              am
-                ? "በዚህ ስሪት የቀጥታ ውይይት አይገኝም። በትምህርት ገጹ ላይ የተዘጋጁ መረጃዎችን ያግኙ።"
-                : "Live chat is not available in this version. Browse the Learn section for prepared educational content.",
-              [
-                {
-                  text: am ? "ዝጋ" : "Close",
-                  style: "cancel",
-                },
-                {
-                  text: am ? "ትምህርቶችን ክፈት" : "Open learning",
-                  onPress: () => router.push("/public/learn" as Href),
-                },
-              ],
-            )
-          }
-          style={styles.questionsCard}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={20}
-            color="#317A48"
-          />
-          <View style={styles.questionsCopy}>
-            <Text style={styles.questionsTitle}>
-              {am ? "አጠቃላይ ጥያቄ አለዎት?" : "Have a general question?"}
-            </Text>
-            <Text style={styles.questionsSubtitle}>
-              {am ? "ኦፓልን ይጠይቁ · የተዘጋጁ መልሶች" : "Ask Opal · prepared answers"}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color="#748579" />
-        </Pressable>
-      </ScrollView>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/public/learn" as Href)}
+            style={styles.learningLink}
+          >
+            <Text style={styles.learningLinkText}>{t.askOpal}</Text>
+            <Text style={styles.learningLinkButton}>{t.openLearning}</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function ChoiceCard({
+  selected,
+  icon,
+  title,
+  hint,
+  onPress,
+}: {
+  selected: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  hint: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      onPress={onPress}
+      style={[styles.choiceCard, selected && styles.choiceCardSelected]}
+    >
+      <View style={styles.choiceIcon}>
+        <Ionicons name={icon} size={19} color="#317A48" />
+      </View>
+      <View style={styles.choiceCopy}>
+        <Text style={styles.choiceTitle}>{title}</Text>
+        <Text style={styles.choiceHint}>{hint}</Text>
+      </View>
+      <Ionicons
+        name={selected ? "radio-button-on" : "radio-button-off"}
+        size={18}
+        color={selected ? "#25804A" : "#A0ADA2"}
+      />
+    </Pressable>
+  );
+}
+
+function Notice({
+  icon,
+  title,
+  body,
+  tone = "normal",
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  body: string;
+  tone?: "normal" | "urgent";
+}) {
+  return (
+    <View style={[styles.notice, tone === "urgent" && styles.urgentNotice]}>
+      <Ionicons
+        name={icon}
+        size={20}
+        color={tone === "urgent" ? "#98642B" : "#2E7846"}
+      />
+      <View style={styles.noticeCopy}>
+        <Text style={[styles.noticeTitle, tone === "urgent" && styles.urgentTitle]}>
+          {title}
+        </Text>
+        <Text style={styles.noticeText}>{body}</Text>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F7FAF7", flex: 1 },
-  content: { padding: 18, paddingBottom: 28 },
+  keyboardView: { flex: 1 },
+  content: { padding: 18, paddingBottom: 34 },
   eyebrow: {
     color: "#438451",
     fontFamily: "Righteous_400Regular",
     fontSize: 9,
     letterSpacing: 1,
   },
-  title: { color: "#1C3524", fontFamily: "Righteous_400Regular", fontSize: 24, marginTop: 8 },
+  title: {
+    color: "#1C3524",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 24,
+    marginTop: 8,
+  },
   subtitle: {
     color: "#69786D",
     fontFamily: "Righteous_400Regular",
     fontSize: 12,
+    lineHeight: 17,
     marginTop: 6,
   },
-  demoNotice: {
+  notice: {
     alignItems: "flex-start",
     backgroundColor: "#EAF4EB",
-    borderRadius: 15,
+    borderRadius: 14,
     flexDirection: "row",
-    gap: 10,
-    marginTop: 18,
-    padding: 13,
+    gap: 9,
+    marginTop: 13,
+    padding: 12,
   },
-  noticeIcon: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    height: 34,
-    justifyContent: "center",
-    width: 34,
-  },
+  urgentNotice: { backgroundColor: "#FFF5E6", borderColor: "#E9D2A5", borderWidth: 1 },
   noticeCopy: { flex: 1, gap: 4 },
   noticeTitle: { color: "#28583A", fontFamily: "Righteous_400Regular", fontSize: 11 },
-  noticeText: {
-    color: "#607363",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 10,
-    lineHeight: 15,
-  },
-  section: { marginTop: 21 },
+  urgentTitle: { color: "#79531C" },
+  noticeText: { color: "#607363", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15 },
   sectionTitle: {
     color: "#34493A",
     fontFamily: "Righteous_400Regular",
     fontSize: 12,
     marginBottom: 9,
-  },
-  choiceList: { gap: 8 },
-  acknowledgment: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 9,
     marginTop: 20,
   },
-  checkbox: {
-    alignItems: "center",
-    borderColor: "#9BAE9E",
-    borderRadius: 5,
-    borderWidth: 1,
-    height: 19,
-    justifyContent: "center",
-    marginTop: 1,
-    width: 19,
-  },
-  checkboxChecked: { backgroundColor: "#24804A", borderColor: "#24804A" },
-  acknowledgmentText: {
-    color: "#536458",
-    flex: 1,
-    fontFamily: "Righteous_400Regular",
-    fontSize: 10,
-    lineHeight: 15,
-  },
-  submit: {
-    alignItems: "center",
-    backgroundColor: "#08783D",
-    borderRadius: 14,
-    flexDirection: "row",
-    gap: 9,
-    justifyContent: "center",
-    marginTop: 18,
-    minHeight: 48,
-  },
-  submitDisabled: { backgroundColor: "#A9BBAE" },
-  submitPressed: { opacity: 0.82 },
-  submitText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 12 },
-  previewResult: {
-    alignItems: "flex-start",
-    backgroundColor: "#FFF7E8",
-    borderColor: "#E6C982",
-    borderRadius: 14,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 9,
-    marginTop: 12,
-    padding: 12,
-  },
-  previewResultCopy: { flex: 1, gap: 4 },
-  previewResultTitle: { color: "#6B4E14", fontFamily: "Righteous_400Regular", fontSize: 11 },
-  previewResultText: {
-    color: "#755F2D",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 10,
-    lineHeight: 15,
-  },
-  safetyNotice: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 7,
-    marginTop: 16,
-  },
-  safetyText: {
-    color: "#6E7E72",
-    flex: 1,
-    fontFamily: "Righteous_400Regular",
-    fontSize: 9,
-    lineHeight: 14,
-  },
-  questionsCard: {
+  choiceGroup: { gap: 8 },
+  choiceCard: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderColor: "#E3EBE4",
-    borderRadius: 14,
+    borderColor: "#DFE8DF",
+    borderRadius: 13,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
-    marginTop: 18,
-    padding: 12,
+    minHeight: 64,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
   },
-  questionsCopy: { flex: 1, gap: 4 },
-  questionsTitle: { color: "#314738", fontFamily: "Righteous_400Regular", fontSize: 10 },
-  questionsSubtitle: { color: "#748378", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  choiceCardSelected: { backgroundColor: "#EEF7F0", borderColor: "#29804A" },
+  choiceIcon: { alignItems: "center", backgroundColor: "#EAF4EB", borderRadius: 11, height: 36, justifyContent: "center", width: 36 },
+  choiceCopy: { flex: 1, gap: 4 },
+  choiceTitle: { color: "#2D5239", fontFamily: "Righteous_400Regular", fontSize: 11 },
+  choiceHint: { color: "#748378", fontFamily: "Righteous_400Regular", fontSize: 9, lineHeight: 13 },
+  methodRow: { flexDirection: "row", gap: 8 },
+  methodButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#DFE8DF", borderRadius: 11, borderWidth: 1, flex: 1, flexDirection: "row", gap: 7, justifyContent: "center", minHeight: 42 },
+  methodActive: { backgroundColor: "#EEF7F0", borderColor: "#29804A" },
+  methodText: { color: "#6F7F73", fontFamily: "Righteous_400Regular", fontSize: 10 },
+  methodTextActive: { color: "#087A3D" },
+  inputLabel: { color: "#35483A", fontFamily: "Righteous_400Regular", fontSize: 11, marginBottom: 7, marginTop: 16 },
+  input: { backgroundColor: "#FFFFFF", borderColor: "#DFE8DF", borderRadius: 12, borderWidth: 1, color: "#263A2D", fontFamily: "Righteous_400Regular", fontSize: 12, minHeight: 44, paddingHorizontal: 12, paddingVertical: 10 },
+  summaryInput: { minHeight: 88, paddingTop: 11 },
+  characterCount: { color: "#879489", fontFamily: "Righteous_400Regular", fontSize: 8, marginTop: 4, textAlign: "right" },
+  consentRow: { alignItems: "flex-start", flexDirection: "row", gap: 9, marginTop: 18 },
+  checkbox: { alignItems: "center", borderColor: "#9BAE9E", borderRadius: 5, borderWidth: 1, height: 19, justifyContent: "center", marginTop: 1, width: 19 },
+  checkboxSelected: { backgroundColor: "#24804A", borderColor: "#24804A" },
+  consentText: { color: "#536458", flex: 1, fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15 },
+  submitButton: { alignItems: "center", backgroundColor: "#08783D", borderRadius: 14, flexDirection: "row", gap: 9, justifyContent: "center", marginTop: 17, minHeight: 48 },
+  submitDisabled: { backgroundColor: "#A9BBAE" },
+  submitText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 12 },
+  pressed: { opacity: 0.82 },
+  successCard: { alignItems: "center", backgroundColor: "#EAF4EB", borderColor: "#C9DFCC", borderRadius: 16, borderWidth: 1, marginTop: 18, padding: 17 },
+  successTitle: { color: "#245D37", fontFamily: "Righteous_400Regular", fontSize: 15, marginTop: 8 },
+  successText: { color: "#607363", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15, marginTop: 5, textAlign: "center" },
+  referenceLabel: { color: "#718075", fontFamily: "Righteous_400Regular", fontSize: 9, marginTop: 13 },
+  referenceValue: { color: "#294433", fontFamily: "Righteous_400Regular", fontSize: 14, marginTop: 3 },
+  secondaryButton: { alignItems: "center", borderColor: "#A9C5AD", borderRadius: 12, borderWidth: 1, marginTop: 14, minHeight: 40, justifyContent: "center", paddingHorizontal: 15 },
+  secondaryButtonText: { color: "#357347", fontFamily: "Righteous_400Regular", fontSize: 10 },
+  requestsSection: { marginTop: 10 },
+  emptyRequests: { color: "#7B897E", fontFamily: "Righteous_400Regular", fontSize: 10, paddingBottom: 9 },
+  requestCard: { backgroundColor: "#FFFFFF", borderColor: "#E0E9E1", borderRadius: 12, borderWidth: 1, marginBottom: 8, padding: 11 },
+  requestTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  requestType: { color: "#2D5239", flex: 1, fontFamily: "Righteous_400Regular", fontSize: 10 },
+  requestStatus: { backgroundColor: "#EEF7F0", borderRadius: 10, color: "#397548", fontFamily: "Righteous_400Regular", fontSize: 8, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 4 },
+  requestReference: { color: "#617266", fontFamily: "Righteous_400Regular", fontSize: 9, marginTop: 7 },
+  requestDate: { color: "#879489", fontFamily: "Righteous_400Regular", fontSize: 8, marginTop: 3 },
+  learningLink: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 12, paddingVertical: 10 },
+  learningLinkText: { color: "#6C7C70", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  learningLinkButton: { color: "#087A3D", fontFamily: "Righteous_400Regular", fontSize: 9, textDecorationLine: "underline" },
 });

@@ -61,4 +61,22 @@ export default defineSchema({
     consentedAt: v.number(),
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
+  careRequests: defineTable({
+    userId: v.string(),
+    requestType: v.union(v.literal("clinical"), v.literal("counselling")),
+    contactMethod: v.union(v.literal("email"), v.literal("phone")),
+    contactDetails: v.string(),
+    requestSummary: v.optional(v.string()),
+    status: v.union(
+      v.literal("submitted"),
+      v.literal("inReview"),
+      v.literal("contacted"),
+      v.literal("closed"),
+    ),
+    consentedAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId_createdAt", ["userId", "createdAt"])
+    .index("by_status_createdAt", ["status", "createdAt"]),
 });
