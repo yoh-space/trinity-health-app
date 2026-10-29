@@ -179,11 +179,13 @@ export default function OpalScreen() {
           : am
             ? "በአሁኑ ጊዜ በተዘጋጁ የትምህርት ማስታወሻዎች ውስጥ ለዚህ ጥያቄ መልስ የለኝም። ከብቁ የጤና ባለሙያ ጋር ይነጋገሩ።"
             : "I can only help with questions covered by the prepared learning notes. I don’t have a source-backed answer for this one; please ask a qualified health professional.";
+    const userMessageId = nextMessageId.current++;
+    const opalMessageId = nextMessageId.current++;
     setMessages((previous) => [
       ...previous,
-      { id: nextMessageId.current++, role: "user", text },
+      { id: userMessageId, role: "user", text },
       {
-        id: nextMessageId.current++,
+        id: opalMessageId,
         role: "opal",
         text: response,
         ...(intent !== "safe" ? { safety: true } : {}),
