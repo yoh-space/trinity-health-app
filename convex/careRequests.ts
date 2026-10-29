@@ -2,6 +2,24 @@ import { type Auth } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+async function getClinicalStaffId({ auth }: { auth: Auth }) {
+  const identity = await auth.getUserIdentity();
+  if (!identity?.subject) return null;
+  const allowedUsers = (process.env.CLINICAL_CLERK_USER_IDS ?? "")
+    .split(/[\s,]+/)
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return allowedUsers.includes(identity.subject) ? identity.subject : null;
+}
+
+async function requireClinicalStaff(ctx: { auth: Auth }) {
+  const staffId = await getClinicalStaffId(ctx);
+  if (!staffId) {
+    throw new Error("Clinical dashboard access is not authorized or configured.");
+  }
+  return staffId;
+}
+
 async function requireUserId({ auth }: { auth: Auth }) {
   const identity = await auth.getUserIdentity();
   if (!identity?.subject) {
@@ -16,13 +34,39 @@ export const listMine = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity?.subject) return [];
 
-    return await ctx.db
+    const requests = await ctx.db
       .query("careRequests")
       .withIndex("by_userId_createdAt", (q) =>
         q.eq("userId", identity.subject),
       )
       .order("desc")
       .take(10);
+
+    return requests.map(
+      ({
+        _id,
+        _creationTime,
+        requestType,
+        contactMethod,
+        contactDetails,
+        requestSummary,
+        status,
+        consentedAt,
+        createdAt,
+        updatedAt,
+      }) => ({
+        _id,
+        _creationTime,
+        requestType,
+        contactMethod,
+        contactDetails,
+        requestSummary,
+        status,
+        consentedAt,
+        createdAt,
+        updatedAt,
+      }),
+    );
   },
 });
 
@@ -57,7 +101,7 @@ export const create = mutation({
     }
 
     const now = Date.now();
-    return await ctx.db.insert("careRequests", {
+    const requestId = await ctx.db.insert("careRequests", {
       userId,
       requestType: args.requestType,
       contactMethod: args.contactMethod,
@@ -67,6 +111,114 @@ export const create = mutation({
       consentedAt: now,
       createdAt: now,
       updatedAt: now,
+    });
+    await ctx.db.insert("careRequestEvents", {
+      requestId,
+      actorUserId: userId,
+      actorRole: "user",
+      action: "submitted",
+      toStatus: "submitted",
+      createdAt: now,
+    });
+    return requestId;
+  },
+});
+
+export const listClinicalQueue = query({
+  args: {},
+  handler: async (ctx) => {
+    const staffId = await getClinicalStaffId(ctx);
+    if (!staffId) return { authorized: false, requests: [] };
+
+    const [submitted, inReview, contacted] = await Promise.all([
+      ctx.db
+        .query("careRequests")
+        .withIndex("by_type_status_createdAt", (q) =>
+          q.eq("requestType", "clinical").eq("status", "submitted"),
+        )
+        .order("asc")
+        .take(100),
+      ctx.db
+        .query("careRequests")
+        .withIndex("by_type_status_createdAt", (q) =>
+          q.eq("requestType", "clinical").eq("status", "inReview"),
+        )
+        .order("asc")
+        .take(100),
+      ctx.db
+        .query("careRequests")
+        .withIndex("by_type_status_createdAt", (q) =>
+          q.eq("requestType", "clinical").eq("status", "contacted"),
+        )
+        .order("asc")
+        .take(100),
+    ]);
+
+    const requests = [...submitted, ...inReview, ...contacted].sort(
+      (a, b) => a.createdAt - b.createdAt,
+    );
+    return {
+      authorized: true,
+      requests: requests.map(
+        ({ userId, assignedTo, ...request }) => ({
+          ...request,
+          assignedToMe: assignedTo === staffId,
+          assignedElsewhere: Boolean(assignedTo && assignedTo !== staffId),
+        }),
+      ),
+    };
+  },
+});
+
+export const updateClinicalStatus = mutation({
+  args: {
+    requestId: v.id("careRequests"),
+    status: v.union(
+      v.literal("inReview"),
+      v.literal("contacted"),
+      v.literal("closed"),
+    ),
+  },
+  handler: async (ctx, { requestId, status }) => {
+    const staffId = await requireClinicalStaff(ctx);
+    const request = await ctx.db.get(requestId);
+    if (!request) throw new Error("This request no longer exists.");
+    if (request.requestType !== "clinical") {
+      throw new Error("Clinical staff may only update clinical requests.");
+    }
+    if (request.assignedTo && request.assignedTo !== staffId) {
+      throw new Error("This request is assigned to another clinical staff member.");
+    }
+
+    const allowedTransitions: Record<string, string[]> = {
+      submitted: ["inReview"],
+      inReview: ["contacted"],
+      contacted: ["closed"],
+      closed: [],
+    };
+    const claimingUnassigned =
+      request.status === "inReview" && status === "inReview" && !request.assignedTo;
+    if (
+      !claimingUnassigned &&
+      !allowedTransitions[request.status]?.includes(status)
+    ) {
+      throw new Error("That status transition is not allowed.");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(requestId, {
+      status,
+      updatedAt: now,
+      ...(status === "inReview" ? { assignedTo: staffId, assignedAt: now } : {}),
+    });
+    await ctx.db.insert("careRequestEvents", {
+      requestId,
+      actorUserId: staffId,
+      actorRole: "clinical",
+      action: claimingUnassigned ? "assigned" : "statusChanged",
+      fromStatus: request.status,
+      toStatus: status,
+      createdAt: now,
     });
   },
 });

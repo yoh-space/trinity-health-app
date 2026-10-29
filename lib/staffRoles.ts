@@ -44,4 +44,6 @@ export function getStaffRole(value: string | string[] | undefined): StaffRole {
 }
 
 export const staffDashboardPath = (role: StaffRoleId): Href =>
-  `/staff-dashboard?role=${role}` as Href;
+  role === "clinician"
+    ? "/staff/clinical"
+    : (`/staff-dashboard?role=${role}` as Href);
