@@ -28,6 +28,10 @@ export default function StaffPortalScreen() {
   const role = getStaffRole(roleId);
 
   const openDesk = () => {
+    if (roleId === "clinician") {
+      router.push("/staff/clinical" as Href);
+      return;
+    }
     if (!staffId.trim() || !password.trim()) {
       setMessage(
         "Enter your Staff ID and password, or continue with demo access.",
@@ -114,31 +118,40 @@ export default function StaffPortalScreen() {
           </View>
 
           <View style={styles.form}>
-            <Text style={styles.fieldLabel}>Staff ID</Text>
-            <TextInput
-              autoCapitalize="characters"
-              autoCorrect={false}
-              onChangeText={(value) => {
-                setStaffId(value);
-                setMessage("");
-              }}
-              placeholder="e.g. THS-0000"
-              placeholderTextColor="#9AA89E"
-              style={styles.input}
-              value={staffId}
-            />
-            <Text style={styles.fieldLabel}>Password</Text>
-            <TextInput
-              onChangeText={(value) => {
-                setPassword(value);
-                setMessage("");
-              }}
-              placeholder="••••••••"
-              placeholderTextColor="#9AA89E"
-              secureTextEntry
-              style={styles.input}
-              value={password}
-            />
+            {roleId === "clinician" ? (
+              <Text style={styles.secureInfoText}>
+                Use your Trinity-approved account. Clinical access is checked by
+                the server; demo credentials are disabled.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.fieldLabel}>Staff ID</Text>
+                <TextInput
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  onChangeText={(value) => {
+                    setStaffId(value);
+                    setMessage("");
+                  }}
+                  placeholder="e.g. THS-0000"
+                  placeholderTextColor="#9AA89E"
+                  style={styles.input}
+                  value={staffId}
+                />
+                <Text style={styles.fieldLabel}>Password</Text>
+                <TextInput
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    setMessage("");
+                  }}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9AA89E"
+                  secureTextEntry
+                  style={styles.input}
+                  value={password}
+                />
+              </>
+            )}
             <Pressable
               accessibilityRole="button"
               onPress={openDesk}
@@ -147,27 +160,32 @@ export default function StaffPortalScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <Text style={styles.signInText}>Sign in</Text>
+              <Text style={styles.signInText}>
+                {roleId === "clinician" ? "Open clinical dashboard" : "Sign in"}
+              </Text>
               <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={openDemo}
-              style={({ pressed }) => [
-                styles.demoButton,
-                pressed && styles.demoPressed,
-              ]}
-            >
-              <Text style={styles.demoText}>Continue with demo access</Text>
-            </Pressable>
+            {roleId !== "clinician" && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={openDemo}
+                style={({ pressed }) => [
+                  styles.demoButton,
+                  pressed && styles.demoPressed,
+                ]}
+              >
+                <Text style={styles.demoText}>Continue with demo access</Text>
+              </Pressable>
+            )}
             {message ? <Text style={styles.message}>{message}</Text> : null}
           </View>
 
           <View style={styles.privacyRow}>
             <Ionicons name="lock-closed-outline" size={11} color="#66806D" />
             <Text style={styles.privacyText}>
-              Prototype sign-in; nothing is checked, stored, or sent. Sample
-              requests are fictional and hold no personal details.
+              {roleId === "clinician"
+                ? "Clinical request access is verified server-side against the approved staff allowlist."
+                : "Prototype sign-in; nothing is checked, stored, or sent. Sample requests are fictional and hold no personal details."}
             </Text>
           </View>
 
@@ -273,6 +291,13 @@ const styles = StyleSheet.create({
   },
   roleDescriptionSelected: { color: "#587962" },
   form: { marginTop: 13 },
+  secureInfoText: {
+    color: "#5B6F60",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 8,
+    lineHeight: 12,
+    marginBottom: 5,
+  },
   fieldLabel: {
     color: "#5B6F60",
     fontFamily: "Righteous_400Regular",

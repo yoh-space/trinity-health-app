@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getStaffRole } from "../lib/staffRoles";
@@ -21,6 +21,7 @@ export default function StaffDashboardScreen() {
   const router = useRouter();
   const { role: roleParam } = useLocalSearchParams<{ role?: string }>();
   const role = getStaffRole(roleParam);
+  if (role.id === "clinician") return <Redirect href="/staff/clinical" />;
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView

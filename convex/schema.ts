@@ -67,6 +67,8 @@ export default defineSchema({
     contactMethod: v.union(v.literal("email"), v.literal("phone")),
     contactDetails: v.string(),
     requestSummary: v.optional(v.string()),
+    assignedTo: v.optional(v.string()),
+    assignedAt: v.optional(v.number()),
     status: v.union(
       v.literal("submitted"),
       v.literal("inReview"),
@@ -78,5 +80,31 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_userId_createdAt", ["userId", "createdAt"])
-    .index("by_status_createdAt", ["status", "createdAt"]),
+    .index("by_status_createdAt", ["status", "createdAt"])
+    .index("by_type_status_createdAt", ["requestType", "status", "createdAt"]),
+  careRequestEvents: defineTable({
+    requestId: v.id("careRequests"),
+    actorUserId: v.string(),
+    actorRole: v.union(v.literal("user"), v.literal("clinical")),
+    action: v.union(
+      v.literal("submitted"),
+      v.literal("statusChanged"),
+      v.literal("assigned"),
+    ),
+    fromStatus: v.optional(
+      v.union(
+        v.literal("submitted"),
+        v.literal("inReview"),
+        v.literal("contacted"),
+        v.literal("closed"),
+      ),
+    ),
+    toStatus: v.union(
+      v.literal("submitted"),
+      v.literal("inReview"),
+      v.literal("contacted"),
+      v.literal("closed"),
+    ),
+    createdAt: v.number(),
+  }).index("by_requestId_createdAt", ["requestId", "createdAt"]),
 });
