@@ -11,6 +11,7 @@
 import type * as education from "../education.js";
 import type * as educationSeedData from "../educationSeedData.js";
 import type * as notes from "../notes.js";
+import type * as onboarding from "../onboarding.js";
 import type * as openai from "../openai.js";
 import type * as seed from "../seed.js";
 import type * as utils from "../utils.js";
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   education: typeof education;
   educationSeedData: typeof educationSeedData;
   notes: typeof notes;
+  onboarding: typeof onboarding;
   openai: typeof openai;
   seed: typeof seed;
   utils: typeof utils;

@@ -41,4 +41,24 @@ export default defineSchema({
     .index("by_authorTokenIdentifier", ["authorTokenIdentifier"])
     .index("by_category", ["category"])
     .index("by_contentKey", ["contentKey"]),
+  onboardingProfiles: defineTable({
+    userId: v.string(),
+    audience: v.string(),
+    age: v.string(),
+    support: v.array(v.string()),
+    generalSupport: v.boolean(),
+    otherSupport: v.string(),
+    meals: v.string(),
+    activity: v.string(),
+    eatingPatterns: v.array(v.string()),
+    goals: v.array(v.string()),
+    otherGoal: v.string(),
+    consultation: v.string(),
+    otherConsultation: v.string(),
+    heightCm: v.optional(v.number()),
+    weightKg: v.optional(v.number()),
+    bmi: v.optional(v.number()),
+    consentedAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
 });

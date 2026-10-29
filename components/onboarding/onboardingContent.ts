@@ -1,6 +1,6 @@
 import type { WelcomeLanguage } from "../welcome/welcomeCopy";
 
-export type OnboardingStep = 1 | 2 | 3 | 4 | 5;
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type LocalizedOption = {
   id: string;
@@ -36,6 +36,11 @@ export const onboardingCopy: Record<
     otherConsultation: string;
     otherConsultationHint: string;
     otherConsultationPlaceholder: string;
+    height: string;
+    weight: string;
+    measurementHint: string;
+    bmiLabel: string;
+    bmiUnavailable: string;
     optionalPrivacy: string;
     skip: string;
     continue: string;
@@ -45,6 +50,11 @@ export const onboardingCopy: Record<
     remember: string;
     sessionOnly: string;
     localPrivacy: string;
+    cloudConsent: string;
+    cloudConsentHint: string;
+    accountRequired: string;
+    continueWithoutCloud: string;
+    stayOnScreen: string;
     startPlan: string;
     canChange: string;
     values: Record<string, string>;
@@ -58,14 +68,16 @@ export const onboardingCopy: Record<
       2: "ምን ላይ ድጋፍ ይፈልጋሉ?",
       3: "የዕለት ተዕለት ልምድዎ",
       4: "ግቦችዎ ምንድን ናቸው?",
-      5: "ዕቅድዎ ዝግጁ ነው",
+      5: "ቁመትና ክብደት (አማራጭ)",
+      6: "ዕቅድዎ ዝግጁ ነው",
     },
     subtitle: {
       1: "ትምህርቶችንና ምክክርን ለእርስዎ እንዲስማሙ ለማድረግ።",
       2: "የሚመለከቱትን ሁሉ ይምረጡ። ሰፊ ርዕሶች ብቻ፤ ምርመራ፣ መድኃኒት ወይም ውጤት አያስፈልግም።",
       3: "መመሪያው ከእውነተኛ የኑሮ እና የአመጋገብ ልምድዎ ጋር እንዲስማማ።",
       4: "እስከ ሶስት ይምረጡ።",
-      5: "ከመጀመራችን በፊት በአጭሩ ይመልከቱ።",
+      5: "ለራስዎ ከሆነ የአዋቂ BMI ለማስላት ቁመትና ክብደት ያስገቡ። ይህ አማራጭ ነው።",
+      6: "ከመጀመራችን በፊት በአጭሩ ይመልከቱ።",
     },
     forPrompt: "ይህ ለማን ነው?",
     age: "የዕድሜ ክልል",
@@ -86,7 +98,12 @@ export const onboardingCopy: Record<
     otherConsultation: "ሌላ የምክክር ምርጫ (አማራጭ)",
     otherConsultationHint: "አጠቃላይ ምርጫ ብቻ ይጻፉ።",
     otherConsultationPlaceholder: "ለምሳሌ፦ ከቤተሰብ አባል ጋር መሳተፍ",
-    optionalPrivacy: "ሁሉም ጥያቄዎች አማራጭ ናቸው። ስም፣ ስልክ ወይም መለያ አይጠየቅም።",
+    height: "ቁመት (ሴ.ሜ)",
+    weight: "ክብደት (ኪ.ግ)",
+    measurementHint: "ለራስዎ ብቻ ያስገቡ። ቁመት 100–250 ሴ.ሜ፣ ክብደት 25–300 ኪ.ግ። ለልጆች፣ ለወጣቶች ወይም በእርግዝና ጊዜ BMI አንጠቀምም።",
+    bmiLabel: "BMI ግምት",
+    bmiUnavailable: "ቁመትና ክብደት ሲሞሉ BMI እዚህ ይታያል።",
+    optionalPrivacy: "ሁሉም ጥያቄዎች አማራጭ ናቸው።",
     skip: "ይህን ዝለል",
     continue: "ቀጥል",
     showAll: "ማዋቀሩን ዝለል፣ ሁሉንም አሳይ",
@@ -95,7 +112,12 @@ export const onboardingCopy: Record<
     remember: "በዚህ መሣሪያ ላይ ያስቀምጡ",
     sessionOnly: "ካልሆነ መልሶችዎ ለዚህ ክፍለ ጊዜ ብቻ ይቆያሉ።",
     localPrivacy:
-      "መልሶችዎ በዚህ መሣሪያ ላይ ብቻ ይቆያሉ፤ ምንም አይላክም። ይህ ትምህርት ነው፣ የሕክምና ምክር አይደለም።",
+      "በመጨረሻው ገጽ ፈቃድ ካልሰጡ በስተቀር ወደ መለያዎ ምንም አይላክም። BMI የጤና ምርመራ ወይም የሕክምና ምክር አይደለም።",
+    cloudConsent: "የመገለጫዬን መልሶች ወደ መለያዬ አስቀምጥ",
+    cloudConsentHint: "ቁመትን፣ ክብደትንና BMIን ጨምሮ። ወደ መለያዎ የሚሄደው እርስዎ ሲመርጡ ብቻ ነው።",
+    accountRequired: "ወደ መለያዎ ለማስቀመጥ መጀመሪያ መግባት ያስፈልጋል። ሳይላኩ መቀጠል ይችላሉ።",
+    continueWithoutCloud: "ሳያስቀምጡ ይቀጥሉ",
+    stayOnScreen: "እዚህ ይቆዩ",
     startPlan: "ዕቅዴን ጀምር",
     canChange: "ከመጀመርዎ በፊት መልስዎን ለመቀየር ወደ ኋላ ይመለሱ።",
     values: {
@@ -149,14 +171,16 @@ export const onboardingCopy: Record<
       2: "What would you like support with?",
       3: "Your daily routine",
       4: "What are your goals?",
-      5: "Your plan is ready",
+      5: "Height and weight (optional)",
+      6: "Your plan is ready",
     },
     subtitle: {
       1: "So we can fit lessons and consultations to the right person.",
       2: "Choose any that apply. Broad topics only. No diagnoses, medication, or test results needed.",
       3: "So guidance fits the way you actually live and eat.",
       4: "Pick up to three.",
-      5: "Take a quick look before we begin.",
+      5: "Enter your height and weight to calculate an adult BMI for yourself. This is optional.",
+      6: "Take a quick look before we begin.",
     },
     forPrompt: "Who is this for?",
     age: "Age range",
@@ -180,8 +204,13 @@ export const onboardingCopy: Record<
     otherConsultationHint:
       "Share a general preference only. Do not include names, phone numbers, or personal details.",
     otherConsultationPlaceholder: "For example: attend with a family member",
-    optionalPrivacy:
-      "Every question is optional. No name, phone number, or account.",
+    height: "Height (cm)",
+    weight: "Weight (kg)",
+    measurementHint:
+      "For yourself only. Height 100–250 cm; weight 25–300 kg. BMI is not calculated here for children, teens, or pregnancy.",
+    bmiLabel: "Estimated BMI",
+    bmiUnavailable: "BMI appears here when both measurements are valid.",
+    optionalPrivacy: "Every question is optional.",
     skip: "Skip this step",
     continue: "Continue",
     showAll: "Skip setup. Show me everything.",
@@ -190,7 +219,14 @@ export const onboardingCopy: Record<
     remember: "Remember on this device",
     sessionOnly: "Otherwise your answers last for this session only.",
     localPrivacy:
-      "Answers stay only on this device; nothing is sent. This is education, not medical advice.",
+      "Nothing is sent to your account unless you opt in on the final review step. BMI is not a diagnosis or medical advice.",
+    cloudConsent: "Save my profile answers to my account",
+    cloudConsentHint:
+      "This includes height, weight, and BMI. It is sent only if you select this option.",
+    accountRequired:
+      "Sign in is required to save to your account. You can continue without sending these answers.",
+    continueWithoutCloud: "Continue without saving",
+    stayOnScreen: "Stay here",
     startPlan: "Start my plan",
     canChange: "Go back to change any answer before you begin.",
     values: {
