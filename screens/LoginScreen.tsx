@@ -1,9 +1,9 @@
-import React from "react";
-import { StyleSheet, View, Text, TouchableOpacity, Image } from "react-native";
 import { useSSO } from "@clerk/expo";
-import { RFValue } from "react-native-responsive-fontsize";
 import { AntDesign } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { RFValue } from "react-native-responsive-fontsize";
 
 type OAuthStrategy = "oauth_google" | "oauth_apple";
 
@@ -31,10 +31,10 @@ const LoginScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Image
-          source={require("../assets/icons/logo.png")} // Ensure the correct path to your logo image file
+        {/* <Image
+          source={require("./assets/icon.png")} // Ensure the correct path to your logo image file
           style={styles.logo}
-        />
+        /> */}
         <Text style={styles.title}>Log in to your account</Text>
         <Text style={styles.subtitle}>Welcome! Please login below.</Text>
         <TouchableOpacity
@@ -43,10 +43,6 @@ const LoginScreen = () => {
             onPress({ strategy: "oauth_google" });
           }}
         >
-          <Image
-            style={styles.googleIcon}
-            source={require("../assets/icons/google.png")}
-          />
           <Text style={{ ...styles.buttonText, color: "#344054" }}>
             Continue with Google
           </Text>
@@ -67,7 +63,9 @@ const LoginScreen = () => {
         </TouchableOpacity>
 
         <View style={styles.signupContainer}>
-          <Text style={{ fontFamily: "Righteous_400Regular" }}>Don’t have an account? </Text>
+          <Text style={{ fontFamily: "Righteous_400Regular" }}>
+            Don’t have an account?{" "}
+          </Text>
           <Text>Sign up above.</Text>
         </View>
       </View>

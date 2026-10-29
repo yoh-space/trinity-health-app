@@ -1,22 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  Image,
-  Dimensions,
-  TouchableOpacity,
-  TextInput,
-  Keyboard,
-  Animated,
-  Alert,
-} from "react-native";
-import { RFValue } from "react-native-responsive-fontsize";
-import { AntDesign } from "@expo/vector-icons";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { api } from "../convex/_generated/api";
+import { AntDesign, Ionicons } from "@expo/vector-icons";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import {
+    Alert,
+    Animated,
+    Dimensions,
+    Keyboard,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { RFValue } from "react-native-responsive-fontsize";
+import { api } from "../convex/_generated/api";
 
 const { width } = Dimensions.get("window");
 
@@ -109,31 +108,18 @@ export default function CreateNoteScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Image
-          source={require("../assets/icons/logo2small.png")} // Replace with your logo image file
-          style={styles.logo}
-        />
-      </View>
-
       <View style={styles.underHeaderContainer}>
         <TouchableOpacity
           onPress={() => {
             router.back();
           }}
         >
-          <Image
-            style={styles.arrowBack}
-            source={require("../assets/icons/arrow-back.png")}
-          />
+          <Ionicons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
 
         <Text style={styles.title}>Create a New Note</Text>
         <TouchableOpacity>
-          <Image
-            style={styles.arrowBack}
-            source={require("../assets/icons/saveIcon.png")}
-          />
+          <Ionicons name="save-outline" size={24} color="black" />
         </TouchableOpacity>
       </View>
 

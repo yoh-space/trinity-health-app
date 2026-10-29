@@ -1,17 +1,17 @@
-import React, { useState } from "react";
-import { api } from "../convex/_generated/api";
+import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
-  StyleSheet,
-  Text,
-  View,
-  Image,
-  Dimensions,
-  TouchableOpacity,
-  ScrollView,
+    Dimensions,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
 import { RFValue } from "react-native-responsive-fontsize";
+import { api } from "../convex/_generated/api";
 
 const { width } = Dimensions.get("window");
 
@@ -32,12 +32,12 @@ export default function InsideNoteScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <Image
           source={require("../assets/icons/logo2small.png")}
           style={styles.logo}
         />
-      </View>
+      </View> */}
 
       <View style={styles.underHeaderContainer}>
         <TouchableOpacity
@@ -45,10 +45,7 @@ export default function InsideNoteScreen() {
             router.back();
           }}
         >
-          <Image
-            style={styles.arrowBack}
-            source={require("../assets/icons/arrow-back.png")}
-          />
+          <Ionicons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
 
         <Text style={styles.title}>{note?.title ?? "Note"}</Text>
@@ -73,15 +70,15 @@ export default function InsideNoteScreen() {
           ]}
           onPress={() => setActiveTab("original")}
         >
-          <Image
-            source={require("../assets/icons/OrignalIcon.png")} // Replace with your original icon image file
+          {/* <Image
+            source={require("./assets/icon.png")} // Replace with your original icon image file
             style={[
               styles.footerIcon,
               activeTab === "original"
                 ? styles.activeIcon
                 : styles.inactiveIcon,
             ]}
-          />
+          /> */}
           <Text
             style={[
               styles.footerText,
@@ -100,12 +97,10 @@ export default function InsideNoteScreen() {
           ]}
           onPress={() => setActiveTab("summary")}
         >
-          <Image
-            source={require("../assets/icons/summaryIcon.png")} // Replace with your summary icon image file
-            style={[
-              styles.footerIcon,
-              activeTab === "summary" ? styles.activeIcon : styles.inactiveIcon,
-            ]}
+          <Ionicons
+            name="document-text-outline"
+            size={24}
+            color={activeTab === "summary" ? "#fff" : "#000"}
           />
           <Text
             style={[
