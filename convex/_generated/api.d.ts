@@ -10,6 +10,7 @@
 
 import type * as education from "../education.js";
 import type * as educationSeedData from "../educationSeedData.js";
+import type * as careRequests from "../careRequests.js";
 import type * as notes from "../notes.js";
 import type * as onboarding from "../onboarding.js";
 import type * as openai from "../openai.js";
@@ -23,6 +24,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  careRequests: typeof careRequests;
   education: typeof education;
   educationSeedData: typeof educationSeedData;
   notes: typeof notes;
