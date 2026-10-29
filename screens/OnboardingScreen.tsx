@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
+import { useMutation, useQuery } from "convex/react";
 import * as SecureStore from "expo-secure-store";
 import { useRouter, type Href } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -10,9 +12,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { api } from "../convex/_generated/api";
 import { OnboardingChoiceGrid } from "../components/onboarding/OnboardingChoiceGrid";
 import { OnboardingTextField } from "../components/onboarding/OnboardingTextField";
 import {
@@ -27,6 +31,7 @@ import {
   supportOptions,
   type OnboardingStep,
 } from "../components/onboarding/onboardingContent";
+import { calculateBmi } from "../lib/onboarding/bmi";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 type OnboardingAnswers = {
@@ -42,6 +47,8 @@ type OnboardingAnswers = {
   otherGoal: string;
   consultation: string;
   otherConsultation: string;
+  heightCm: string;
+  weightKg: string;
 };
 
 const initialAnswers: OnboardingAnswers = {
@@ -57,6 +64,8 @@ const initialAnswers: OnboardingAnswers = {
   otherGoal: "",
   consultation: "",
   otherConsultation: "",
+  heightCm: "",
+  weightKg: "",
 };
 
 const secureProfileKey = "trinity-onboarding-profile";
@@ -69,17 +78,58 @@ function toggleValue(values: string[], value: string, limit?: number) {
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
+  const savedProfile = useQuery(api.onboarding.getProfile);
+  const saveProfile = useMutation(api.onboarding.saveProfile);
   const language = useTrinityStore((state) => state.language);
   const copy = onboardingCopy[language];
   const [step, setStep] = useState<OnboardingStep>(1);
   const [answers, setAnswers] = useState(initialAnswers);
-  const [rememberOnDevice, setRememberOnDevice] = useState(true);
+  const [rememberOnDevice, setRememberOnDevice] = useState(false);
+  const [saveToAccount, setSaveToAccount] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const profileEditStarted = useRef(false);
+  const canCalculateBmi =
+    answers.audience === "myself" &&
+    ["age18to39", "age40to59", "age60plus"].includes(answers.age) &&
+    !answers.support.includes("pregnancy");
+  const bmi =
+    canCalculateBmi && answers.heightCm.trim() && answers.weightKg.trim()
+      ? calculateBmi(Number(answers.heightCm), Number(answers.weightKg))
+      : null;
+
+  useEffect(() => {
+    if (savedProfile === undefined || profileLoaded) return;
+    setProfileLoaded(true);
+    if (profileEditStarted.current || step > 1) return;
+    if (!savedProfile) return;
+
+    setAnswers({
+      audience: savedProfile.audience ?? "",
+      age: savedProfile.age ?? "",
+      support: savedProfile.support ?? [],
+      generalSupport: savedProfile.generalSupport ?? false,
+      otherSupport: savedProfile.otherSupport ?? "",
+      meals: savedProfile.meals ?? "",
+      activity: savedProfile.activity ?? "",
+      eatingPatterns: savedProfile.eatingPatterns ?? [],
+      goals: savedProfile.goals ?? [],
+      otherGoal: savedProfile.otherGoal ?? "",
+      consultation: savedProfile.consultation ?? "",
+      otherConsultation: savedProfile.otherConsultation ?? "",
+      heightCm: savedProfile.heightCm?.toString() ?? "",
+      weightKg: savedProfile.weightKg?.toString() ?? "",
+    });
+  }, [savedProfile, profileLoaded, step]);
 
   const update = <K extends keyof OnboardingAnswers>(
     key: K,
     value: OnboardingAnswers[K],
-  ) => setAnswers((current) => ({ ...current, [key]: value }));
+  ) => {
+    profileEditStarted.current = true;
+    setAnswers((current) => ({ ...current, [key]: value }));
+  };
 
   const openLearning = () => {
     router.replace("/public/home" as Href);
@@ -93,45 +143,101 @@ export default function OnboardingScreen() {
     router.replace("/" as Href);
   };
 
-  const finish = async () => {
-    setIsFinishing(true);
-    try {
-      if (rememberOnDevice) {
-        await SecureStore.setItemAsync(
-          secureProfileKey,
-          JSON.stringify({ ...answers, language, updatedAt: Date.now() }),
-        );
-      } else {
-        await SecureStore.deleteItemAsync(secureProfileKey);
-      }
-      openLearning();
-    } catch (error) {
-      console.error("Unable to save onboarding answers on this device.", error);
+  const finish = async (continueWithoutCloud = false) => {
+    if (saveToAccount && !isSignedIn && !continueWithoutCloud) {
       Alert.alert(
-        language === "am"
-          ? "መልሶችን ማስቀመጥ አልተቻለም"
-          : "Could not save your answers",
-        language === "am"
-          ? "እባክዎ እንደገና ይሞክሩ ወይም ሳያስቀምጡ ይቀጥሉ።"
-          : "Please try again, or continue without saving them.",
+        language === "am" ? "መግባት ያስፈልጋል" : "Sign-in required",
+        copy.accountRequired,
         [
+          { text: copy.stayOnScreen, style: "cancel" },
           {
-            text: language === "am" ? "ይቀጥሉ" : "Continue without saving",
-            onPress: openLearning,
-          },
-          {
-            text: language === "am" ? "ደግመው ይሞክሩ" : "Try again",
-            onPress: () => void finish(),
+            text: copy.continueWithoutCloud,
+            onPress: () => void finish(true),
           },
         ],
       );
+      return;
+    }
+    setIsFinishing(true);
+    try {
+      if (saveToAccount && isSignedIn && !continueWithoutCloud) {
+        try {
+          await saveProfile({
+            consent: true,
+            audience: answers.audience,
+            age: answers.age,
+            support: answers.support,
+            generalSupport: answers.generalSupport,
+            otherSupport: answers.otherSupport,
+            meals: answers.meals,
+            activity: answers.activity,
+            eatingPatterns: answers.eatingPatterns,
+            goals: answers.goals,
+            otherGoal: answers.otherGoal,
+            consultation: answers.consultation,
+            otherConsultation: answers.otherConsultation,
+            ...(bmi !== null
+              ? {
+                  heightCm: Number(answers.heightCm),
+                  weightKg: Number(answers.weightKg),
+                }
+              : {}),
+          });
+        } catch (error) {
+          console.error("Unable to save onboarding profile to Convex.", error);
+          Alert.alert(
+            language === "am" ? "መልሶችን ማስቀመጥ አልተቻለም" : "Could not save to your account",
+            language === "am"
+              ? "እንደገና ይሞክሩ ወይም ወደ መለያ ሳያስቀምጡ ይቀጥሉ።"
+              : "Try again, or continue without saving to your account.",
+            [
+              {
+                text: copy.continueWithoutCloud,
+                onPress: () => void finish(true),
+              },
+              {
+                text: language === "am" ? "ደግመው ይሞክሩ" : "Try again",
+                onPress: () => void finish(false),
+              },
+            ],
+          );
+          return;
+        }
+      }
+      try {
+        if (rememberOnDevice) {
+          await SecureStore.setItemAsync(
+            secureProfileKey,
+            JSON.stringify({ ...answers, language, updatedAt: Date.now() }),
+          );
+        } else {
+          await SecureStore.deleteItemAsync(secureProfileKey);
+        }
+      } catch (error) {
+        console.error("Unable to save onboarding answers on this device.", error);
+        Alert.alert(
+          language === "am" ? "መልሶችን ማስቀመጥ አልተቻለም" : "Could not save on this device",
+          language === "am"
+            ? "ሳያስቀምጡ መቀጠል ወይም እንደገና መሞከር ይችላሉ።"
+            : "You can continue without a device copy or try again.",
+          [
+            { text: copy.continue, onPress: openLearning },
+            {
+              text: language === "am" ? "ደግመው ይሞክሩ" : "Try again",
+              onPress: () => void finish(continueWithoutCloud),
+            },
+          ],
+        );
+        return;
+      }
+      openLearning();
     } finally {
       setIsFinishing(false);
     }
   };
 
   const continueToNext = () => {
-    if (step < 5) {
+    if (step < 6) {
       setStep((current) => (current + 1) as OnboardingStep);
     } else {
       void finish();
@@ -299,6 +405,58 @@ export default function OnboardingScreen() {
       case 5:
         return (
           <>
+            <Text style={styles.sectionHint}>{copy.measurementHint}</Text>
+            {canCalculateBmi ? (
+              <>
+                <View style={styles.measurementsRow}>
+                  <View style={styles.measurementField}>
+                    <Text style={styles.sectionLabel}>{copy.height}</Text>
+                    <TextInput
+                      accessibilityLabel={copy.height}
+                      keyboardType="decimal-pad"
+                      maxLength={5}
+                      onChangeText={(value) =>
+                        update("heightCm", sanitizeMeasurement(value))
+                      }
+                      placeholder="165"
+                      placeholderTextColor="#94A297"
+                      style={styles.measurementInput}
+                      value={answers.heightCm}
+                    />
+                  </View>
+                  <View style={styles.measurementField}>
+                    <Text style={styles.sectionLabel}>{copy.weight}</Text>
+                    <TextInput
+                      accessibilityLabel={copy.weight}
+                      keyboardType="decimal-pad"
+                      maxLength={5}
+                      onChangeText={(value) =>
+                        update("weightKg", sanitizeMeasurement(value))
+                      }
+                      placeholder="65"
+                      placeholderTextColor="#94A297"
+                      style={styles.measurementInput}
+                      value={answers.weightKg}
+                    />
+                  </View>
+                </View>
+                <View style={styles.bmiCard}>
+                  <Text style={styles.summaryLabel}>{copy.bmiLabel}</Text>
+                  <Text style={styles.bmiValue}>
+                    {bmi === null ? copy.bmiUnavailable : bmi.toFixed(1)}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <View style={styles.bmiCard}>
+                <Text style={styles.measurementNotice}>{copy.measurementHint}</Text>
+              </View>
+            )}
+          </>
+        );
+      case 6:
+        return (
+          <>
             <View style={styles.summaryCard}>
               <SummaryRow
                 label={language === "am" ? "ለ" : "For"}
@@ -312,6 +470,10 @@ export default function OnboardingScreen() {
                         .join(" · ")
                     : copy.notSpecified
                 }
+              />
+              <SummaryRow
+                label={copy.bmiLabel}
+                value={bmi === null ? copy.notSpecified : bmi.toFixed(1)}
               />
               <SummaryRow
                 label={language === "am" ? "ትኩረት" : "Focus"}
@@ -376,13 +538,29 @@ export default function OnboardingScreen() {
                 <Text style={styles.rememberHint}>{copy.sessionOnly}</Text>
               </View>
             </Pressable>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: saveToAccount }}
+              onPress={() => setSaveToAccount((value) => !value)}
+              style={styles.rememberRow}
+            >
+              <Ionicons
+                name={saveToAccount ? "checkbox" : "square-outline"}
+                size={21}
+                color={saveToAccount ? "#24804A" : "#8B9B8E"}
+              />
+              <View style={styles.rememberCopy}>
+                <Text style={styles.rememberTitle}>{copy.cloudConsent}</Text>
+                <Text style={styles.rememberHint}>{copy.cloudConsentHint}</Text>
+              </View>
+            </Pressable>
           </>
         );
     }
   };
 
   const skipStep = () => {
-    if (step === 5) {
+    if (step === 6) {
       void finish();
       return;
     }
@@ -414,7 +592,7 @@ export default function OnboardingScreen() {
 
           <View style={styles.progressRow}>
             <View style={styles.progressTrack}>
-              {Array.from({ length: 5 }, (_, index) => (
+              {Array.from({ length: 6 }, (_, index) => (
                 <View
                   key={index}
                   style={[
@@ -424,7 +602,7 @@ export default function OnboardingScreen() {
                 />
               ))}
             </View>
-            <Text style={styles.progressText}>{step}/5</Text>
+            <Text style={styles.progressText}>{step}/6</Text>
           </View>
 
           <ScrollView
@@ -448,13 +626,13 @@ export default function OnboardingScreen() {
               />
               <Text style={styles.privacyText}>{copy.optionalPrivacy}</Text>
             </View>
-            {step === 5 && (
+            {step === 6 && (
               <Text style={styles.localPrivacy}>{copy.localPrivacy}</Text>
             )}
           </ScrollView>
 
           <View style={styles.footer}>
-            {step === 5 ? (
+            {step === 6 ? (
               <>
                 <Pressable
                   accessibilityRole="button"
@@ -497,7 +675,7 @@ export default function OnboardingScreen() {
                 </Pressable>
               </View>
             )}
-            {step !== 5 && (
+            {step !== 6 && (
               <Pressable
                 accessibilityRole="button"
                 onPress={openLearning}
@@ -514,6 +692,13 @@ export default function OnboardingScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+function sanitizeMeasurement(value: string) {
+  return value
+    .replace(",", ".")
+    .replace(/[^0-9.]/g, "")
+    .replace(/(\..*)\./g, "$1");
 }
 
 function SummaryRow({
@@ -611,6 +796,39 @@ const styles = StyleSheet.create({
     fontSize: 9,
     marginBottom: 8,
     marginTop: -4,
+  },
+  measurementsRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  measurementField: { flex: 1 },
+  measurementInput: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#DFE8DF",
+    borderRadius: 12,
+    borderWidth: 1,
+    color: "#263A2D",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 12,
+    minHeight: 45,
+    paddingHorizontal: 12,
+  },
+  bmiCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#DCE8DD",
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 14,
+    padding: 13,
+  },
+  bmiValue: {
+    color: "#1C5132",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 20,
+    marginTop: 5,
+  },
+  measurementNotice: {
+    color: "#657369",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 10,
+    lineHeight: 15,
   },
   sectionSpacing: { marginTop: 15 },
   generalOption: {

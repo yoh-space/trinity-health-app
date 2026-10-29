@@ -85,53 +85,6 @@ const questions: Question[] = [
   },
 ];
 
-function BottomNav({
-  language,
-  onNavigate,
-}: {
-  language: "am" | "en";
-  onNavigate: (path: Href) => void;
-}) {
-  const am = language === "am";
-  const items = [
-    ["Home", "መነሻ", "home-outline", "/public/home"],
-    ["Learn", "ትምህርት", "book-outline", "/public/learn"],
-    ["Meals", "ምግብ", "restaurant-outline", "/public/food"],
-    ["Care", "እንክብካቤ", "heart-outline", "/public/care"],
-  ] as const;
-  return (
-    <View style={styles.bottomNav}>
-      {items.map(([label, labelAm, icon, path], index) => {
-        const active = index === 3;
-        return (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={am ? labelAm : label}
-            key={label}
-            onPress={() => onNavigate(path)}
-            style={styles.bottomNavItem}
-          >
-            <View
-              style={[styles.bottomIcon, active && styles.bottomIconActive]}
-            >
-              <Ionicons
-                color={active ? "#2D7D49" : "#77857B"}
-                name={icon}
-                size={17}
-              />
-            </View>
-            <Text
-              style={[styles.bottomLabel, active && styles.bottomLabelActive]}
-            >
-              {am ? labelAm : label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 export default function OpalScreen() {
   const router = useRouter();
   const language = useTrinityStore((state) => state.language);
@@ -386,10 +339,6 @@ export default function OpalScreen() {
               : "Please don't type names, phone numbers, or health details. Messages stay on this screen for this session only."}
           </Text>
         </View>
-        <BottomNav
-          language={language}
-          onNavigate={(path) => router.replace(path)}
-        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -578,30 +527,4 @@ const styles = StyleSheet.create({
     marginTop: 5,
     textAlign: "center",
   },
-  bottomNav: {
-    alignItems: "flex-start",
-    backgroundColor: "#FFFFFF",
-    borderTopColor: "#E2EAE3",
-    borderTopWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-around",
-    minHeight: 61,
-    paddingTop: 5,
-  },
-  bottomNavItem: { alignItems: "center", flex: 1 },
-  bottomIcon: {
-    alignItems: "center",
-    borderRadius: 12,
-    height: 27,
-    justifyContent: "center",
-    width: 34,
-  },
-  bottomIconActive: { backgroundColor: "#E5F2E7" },
-  bottomLabel: {
-    color: "#77857B",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 8,
-    marginTop: 1,
-  },
-  bottomLabelActive: { color: "#2D7D49", fontFamily: "Righteous_400Regular" },
 });
