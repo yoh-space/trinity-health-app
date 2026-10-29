@@ -8,9 +8,9 @@
  * @module
  */
 
+import type * as careRequests from "../careRequests.js";
 import type * as education from "../education.js";
 import type * as educationSeedData from "../educationSeedData.js";
-import type * as careRequests from "../careRequests.js";
 import type * as notes from "../notes.js";
 import type * as onboarding from "../onboarding.js";
 import type * as openai from "../openai.js";
