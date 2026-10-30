@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
 import { useQuery } from "convex/react";
 import { anyApi } from "convex/server";
 import { useRouter, type Href } from "expo-router";
@@ -29,6 +30,7 @@ const topics = [
 
 export default function LearningScreen() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
   const [search, setSearch] = useState("");
   const [activeTopic, setActiveTopic] = useState("all");
   const published = useQuery(anyApi.education.listPublished) as
@@ -61,7 +63,10 @@ export default function LearningScreen() {
 
   const openArticle = (id: string) =>
     router.push(`/public/article/${encodeURIComponent(id)}` as Href);
-  const openOpal = () => router.push("/public/opal" as Href);
+  const openOpal = () =>
+    router.push(
+      (isSignedIn ? "/(app)/(tabs)/opal" : "/public/opal") as Href,
+    );
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>

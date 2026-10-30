@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GuestChoiceChip } from "../components/public/GuestChoiceChip";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 const ingredients = [
@@ -22,8 +24,13 @@ const recipes = [
 
 export default function FoodIdeasScreen() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
   const language = useTrinityStore((state) => state.language);
   const am = language === "am";
+  const homeRoute = isSignedIn ? AUTHENTICATED_HOME_TABS : "/public/home";
+  const profileRoute = isSignedIn ? "/(app)/(tabs)/profile" : "/public/profile";
+  const savedRoute = isSignedIn ? "/(app)/(tabs)/saved" : "/public/saved";
+  const opalRoute = isSignedIn ? "/(app)/(tabs)/opal" : "/public/opal";
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
   const [audience, setAudience] = useState<"family" | "child">("family");
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
@@ -41,8 +48,8 @@ export default function FoodIdeasScreen() {
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <View style={styles.page}>
         <View style={styles.header}>
-          <Pressable accessibilityLabel="Trinity Health Solution home" onPress={() => router.replace("/public/home" as Href)} style={styles.brand}><View style={styles.logo}><Ionicons name="leaf-outline" size={19} color="#16803F" /></View><View><Text style={styles.brandName}>Trinity Health Solution</Text><Text style={styles.brandTag}>GROWING GOOD, TOGETHER</Text></View></Pressable>
-          <View style={styles.headerActions}><Pressable accessibilityLabel={am ? "የተቀመጡ ትምህርቶች" : "Saved lessons"} onPress={() => router.push("/public/saved" as Href)} style={styles.headerIcon}><Ionicons name="bookmark-outline" size={18} color="#365B41" /></Pressable><Pressable accessibilityLabel={am ? "ቅንብሮች" : "Settings"} onPress={() => router.push("/public/settings" as Href)} style={styles.headerIcon}><Ionicons name="settings-outline" size={18} color="#365B41" /></Pressable></View>
+          <Pressable accessibilityLabel="Trinity Health Solution home" onPress={() => router.replace(homeRoute as Href)} style={styles.brand}><View style={styles.logo}><Ionicons name="leaf-outline" size={19} color="#16803F" /></View><View><Text style={styles.brandName}>Trinity Health Solution</Text><Text style={styles.brandTag}>GROWING GOOD, TOGETHER</Text></View></Pressable>
+          <View style={styles.headerActions}><Pressable accessibilityLabel={am ? "የተቀመጡ ትምህርቶች" : "Saved lessons"} onPress={() => router.push(savedRoute as Href)} style={styles.headerIcon}><Ionicons name="bookmark-outline" size={18} color="#365B41" /></Pressable><Pressable accessibilityLabel={am ? "መገለጫ እና ቅንብሮች" : "Profile and settings"} onPress={() => router.push(profileRoute as Href)} style={styles.headerIcon}><Ionicons name="settings-outline" size={18} color="#365B41" /></Pressable></View>
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.eyebrow}>{am ? "በኩሽና ውስጥ እንጀምር" : "LET’S START IN THE KITCHEN"}</Text>
@@ -56,7 +63,7 @@ export default function FoodIdeasScreen() {
           {hasGenerated ? <View style={styles.results}><Text style={styles.resultsTitle}>{am ? "የሚስማሙ ሀሳቦች" : "Ideas matching your selections"}</Text>{matches.length ? matches.map((recipe) => <View key={recipe.id} style={styles.recipe}><Ionicons name="restaurant-outline" size={20} color="#367A49" /><Text style={styles.recipeText}>{am ? recipe.am : recipe.en}</Text></View>) : <Text style={styles.hint}>{am ? "ምንም ሀሳብ የለም።" : "No sample ideas match those selections."}</Text>}</View> : null}
           <View style={styles.bottomSpace} />
         </ScrollView>
-        <Pressable accessibilityLabel="Ask Opal" onPress={() => router.push("/public/opal" as Href)} style={styles.opal}><Ionicons name="sparkles-outline" size={17} color="#FFFFFF" /><Text style={styles.opalText}>Ask Opal</Text></Pressable>
+        <Pressable accessibilityLabel="Ask Opal" onPress={() => router.push(opalRoute as Href)} style={styles.opal}><Ionicons name="sparkles-outline" size={17} color="#FFFFFF" /><Text style={styles.opalText}>Ask Opal</Text></Pressable>
       </View>
     </SafeAreaView>
   );

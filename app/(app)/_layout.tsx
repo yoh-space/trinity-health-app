@@ -6,7 +6,7 @@ export default function AppLayout() {
 
   if (!isLoaded) return null;
 
-  if (!isSignedIn) return <Redirect href="/sign-in" />;
+  if (!isSignedIn) return <Redirect href="/public/home" />;
 
   return <Stack screenOptions={{ headerShown: false }} />;
 }

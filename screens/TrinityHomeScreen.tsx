@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
 import { useRouter, type Href } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,23 +8,31 @@ import { GuestHomeHeader } from "../components/public/GuestHomeHeader";
 import { HomeLessonCard } from "../components/public/HomeLessonCard";
 import { HomeQuickLink } from "../components/public/HomeQuickLink";
 import { homeCopy } from "../components/public/homeContent";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 export default function TrinityHomeScreen() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
   const { language, savedIds, toggleSaved } = useTrinityStore();
   const copy = homeCopy[language];
   const am = language === "am";
 
+  const homeRoute = isSignedIn ? AUTHENTICATED_HOME_TABS : "/public/home";
+  const profileRoute = isSignedIn ? "/(app)/(tabs)/profile" : "/public/profile";
+  const savedRoute = isSignedIn ? "/(app)/(tabs)/saved" : "/public/saved";
+  const opalRoute = isSignedIn ? "/(app)/(tabs)/opal" : "/public/opal";
+  const foodRoute = isSignedIn ? "/(app)/(tabs)/food" : "/public/food";
+  const learnRoute = isSignedIn ? "/(app)/(tabs)/learn" : "/public/learn";
   const openArticle = (id: string) => router.push(`/public/article/${encodeURIComponent(id)}` as Href);
-  const showSettings = () => router.push("/public/settings" as Href);
-  const showSavedLessons = () => router.push("/public/saved" as Href);
-  const openOpal = () => router.push("/public/opal" as Href);
+  const showSettings = () => router.push(profileRoute as Href);
+  const showSavedLessons = () => router.push(savedRoute as Href);
+  const openOpal = () => router.push(opalRoute as Href);
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <GuestHomeHeader language={language} onHomePress={() => router.replace("/public/home" as Href)} onSavedPress={showSavedLessons} onSettingsPress={showSettings} />
+        <GuestHomeHeader language={language} onHomePress={() => router.replace(homeRoute as Href)} onSavedPress={showSavedLessons} onSettingsPress={showSettings} />
         <View style={styles.intro}>
           <Text style={styles.eyebrow}>{copy.eyebrow}</Text>
           <Text style={styles.welcome}>{copy.welcome}</Text>
@@ -31,12 +40,12 @@ export default function TrinityHomeScreen() {
         </View>
         <DailyLessonCard copy={copy} onPress={() => openArticle("food-safety")} />
         <View style={styles.quickLinks}>
-          <HomeQuickLink icon="restaurant-outline" image={require("../assets/images/kitchen-meal.jpg")} title={copy.recipeAction} subtitle={copy.recipeSub} onPress={() => router.push("/public/food" as Href)} />
+          <HomeQuickLink icon="restaurant-outline" image={require("../assets/images/kitchen-meal.jpg")} title={copy.recipeAction} subtitle={copy.recipeSub} onPress={() => router.push(foodRoute as Href)} />
           <HomeQuickLink icon="bookmark-outline" title={copy.notesAction} subtitle={copy.notesSub} onPress={showSavedLessons} />
         </View>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{copy.growTitle}</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/public/learn" as Href)} style={styles.seeAll}><Text style={styles.seeAllText}>{copy.seeAll}</Text><Ionicons name={am ? "arrow-back" : "arrow-forward"} size={13} color="#438451" /></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => router.push(learnRoute as Href)} style={styles.seeAll}><Text style={styles.seeAllText}>{copy.seeAll}</Text><Ionicons name={am ? "arrow-back" : "arrow-forward"} size={13} color="#438451" /></Pressable>
         </View>
         <HomeLessonCard category={copy.pregnancy} title={copy.pregnancyTitle} minutes={copy.readTime(4)} image={require("../assets/images/pregnancy-plate.jpg")} saved={savedIds.includes("pregnancy")} onToggleSaved={() => toggleSaved("pregnancy")} onPress={() => openArticle("pregnancy")} />
         <HomeLessonCard category={copy.childNutrition} title={copy.childNutritionTitle} minutes={copy.readTime(3)} image={require("../assets/images/child-feeding.jpg")} saved={savedIds.includes("child-nutrition")} onToggleSaved={() => toggleSaved("child-nutrition")} onPress={() => openArticle("child-nutrition")} />

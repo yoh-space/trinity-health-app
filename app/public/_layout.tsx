@@ -18,6 +18,7 @@ export default function PublicTabs() {
           care: "heart-outline",
           saved: "bookmark-outline",
           opal: "chatbubble-ellipses-outline",
+          profile: "person-outline",
         };
         const titles: Record<string, string> = am
           ? {
@@ -25,8 +26,15 @@ export default function PublicTabs() {
               learn: "ትምህርት",
               food: "ምግብ",
               care: "እንክብካቤ",
+              profile: "መገለጫ",
             }
-          : { home: "Home", learn: "Learn", food: "Meals", care: "Care" };
+          : {
+              home: "Home",
+              learn: "Learn",
+              food: "Meals",
+              care: "Care",
+              profile: "You",
+            };
 
         return {
           headerShown: false,
@@ -55,6 +63,7 @@ export default function PublicTabs() {
       <Tabs.Screen name="learn" />
       <Tabs.Screen name="food" />
       <Tabs.Screen name="care" />
+      <Tabs.Screen name="profile" />
       <Tabs.Screen name="saved" options={{ href: null }} />
       <Tabs.Screen name="opal" options={{ href: null }} />
       <Tabs.Screen name="settings" options={{ href: null }} />

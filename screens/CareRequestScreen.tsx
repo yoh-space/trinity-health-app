@@ -425,7 +425,11 @@ export default function CareRequestScreen() {
 
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("/public/learn" as Href)}
+            onPress={() =>
+              router.push(
+                (isSignedIn ? "/(app)/(tabs)/learn" : "/public/learn") as Href,
+              )
+            }
             style={styles.learningLink}
           >
             <Text style={styles.learningLinkText}>{t.askOpal}</Text>

@@ -2,7 +2,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
 import { useMutation, useQuery } from "convex/react";
 import * as SecureStore from "expo-secure-store";
-import { useRouter, type Href } from "expo-router";
+import {
+  useLocalSearchParams,
+  useRouter,
+  type Href,
+} from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -17,6 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../convex/_generated/api";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
 import { OnboardingChoiceGrid } from "../components/onboarding/OnboardingChoiceGrid";
 import { OnboardingTextField } from "../components/onboarding/OnboardingTextField";
 import {
@@ -77,6 +82,7 @@ function toggleValue(values: string[], value: string, limit?: number) {
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { source } = useLocalSearchParams<{ source?: string }>();
   const { isSignedIn } = useAuth();
   const savedProfile = useQuery(api.onboarding.getProfile);
   const saveProfile = useMutation(api.onboarding.saveProfile);
@@ -163,16 +169,26 @@ export default function OnboardingScreen() {
     setAnswers((current) => ({ ...current, [key]: value }));
   };
 
-  const openLearning = () => {
-    router.replace("/public/home" as Href);
+  const exitOnboarding = () => {
+    const destination =
+      source === "profile"
+        ? isSignedIn
+          ? "/(app)/(tabs)/profile"
+          : "/public/profile"
+        : isSignedIn
+          ? AUTHENTICATED_HOME_TABS
+          : "/public/home";
+    router.replace(destination as Href);
   };
+
+  const openLearning = exitOnboarding;
 
   const goBack = () => {
     if (step > 1) {
       setStep((current) => (current - 1) as OnboardingStep);
       return;
     }
-    router.replace("/" as Href);
+    exitOnboarding();
   };
 
   const finish = async (continueWithoutCloud = false) => {

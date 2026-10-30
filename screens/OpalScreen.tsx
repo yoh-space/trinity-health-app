@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "@clerk/expo";
 import { useAction } from "convex/react";
 import { anyApi } from "convex/server";
 import { useRouter, type Href } from "expo-router";
@@ -16,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GuestHomeHeader } from "../components/public/GuestHomeHeader";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
 import {
   classifyOpalQuestion,
   containsLikelyPersonalDetails,
@@ -74,6 +76,7 @@ const questions: Question[] = [
 
 export default function OpalScreen() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
   const language = useTrinityStore((state) => state.language);
   const askOpal = useAction(anyApi.opal.ask);
   const [draft, setDraft] = useState("");
@@ -82,6 +85,9 @@ export default function OpalScreen() {
   const [aiConsent, setAiConsent] = useState(false);
   const nextMessageId = useRef(0);
   const am = language === "am";
+  const homeRoute = isSignedIn ? AUTHENTICATED_HOME_TABS : "/public/home";
+  const profileRoute = isSignedIn ? "/(app)/(tabs)/profile" : "/public/profile";
+  const savedRoute = isSignedIn ? "/(app)/(tabs)/saved" : "/public/saved";
 
   const sendToGemini = async (text: string) => {
     const userMessageId = nextMessageId.current++;
@@ -225,9 +231,9 @@ export default function OpalScreen() {
         <View style={styles.pageHeader}>
           <GuestHomeHeader
             language={language}
-            onHomePress={() => router.replace("/public/home" as Href)}
-            onSavedPress={() => router.push("/public/saved" as Href)}
-            onSettingsPress={() => router.push("/public/settings" as Href)}
+            onHomePress={() => router.replace(homeRoute as Href)}
+            onSavedPress={() => router.push(savedRoute as Href)}
+            onSettingsPress={() => router.push(profileRoute as Href)}
           />
         </View>
         <ScrollView
