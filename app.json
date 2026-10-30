@@ -4,7 +4,7 @@
     "slug": "trinity-health",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/icon.png",
     "scheme": "trinityhealth",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -22,7 +22,20 @@
       "expo-router",
       "@clerk/expo",
       "react-native-edge-to-edge",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F8FCF9",
+          "image": "./assets/adaptive-icon/foreground.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#F8FCF9",
+            "image": "./assets/adaptive-icon/foreground.png"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
