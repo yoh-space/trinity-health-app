@@ -16,7 +16,6 @@ export default function TrinityHomeScreen() {
   const { isSignedIn } = useAuth();
   const { language, savedIds, toggleSaved } = useTrinityStore();
   const copy = homeCopy[language];
-  const am = language === "am";
 
   const homeRoute = isSignedIn ? AUTHENTICATED_HOME_TABS : "/public/home";
   const profileRoute = isSignedIn ? "/(app)/(tabs)/profile" : "/public/profile";
@@ -45,7 +44,7 @@ export default function TrinityHomeScreen() {
         </View>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{copy.growTitle}</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push(learnRoute as Href)} style={styles.seeAll}><Text style={styles.seeAllText}>{copy.seeAll}</Text><Ionicons name={am ? "arrow-back" : "arrow-forward"} size={13} color="#438451" /></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => router.push(learnRoute as Href)} style={styles.seeAll}><Text style={styles.seeAllText}>{copy.seeAll}</Text><Ionicons name="arrow-forward" size={13} color="#438451" /></Pressable>
         </View>
         <HomeLessonCard category={copy.pregnancy} title={copy.pregnancyTitle} minutes={copy.readTime(4)} image={require("../assets/images/pregnancy-plate.jpg")} saved={savedIds.includes("pregnancy")} onToggleSaved={() => toggleSaved("pregnancy")} onPress={() => openArticle("pregnancy")} />
         <HomeLessonCard category={copy.childNutrition} title={copy.childNutritionTitle} minutes={copy.readTime(3)} image={require("../assets/images/child-feeding.jpg")} saved={savedIds.includes("child-nutrition")} onToggleSaved={() => toggleSaved("child-nutrition")} onPress={() => openArticle("child-nutrition")} />

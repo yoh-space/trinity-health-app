@@ -2,8 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth, useUser } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { useQuery } from "convex/react";
-import { useRouter, type Href } from "expo-router";
-import { useState } from "react";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -18,7 +18,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../convex/_generated/api";
 import { AUTHENTICATED_PROFILE_TAB } from "../constants/authRoutes";
-import { ONBOARDING_PROFILE_KEY } from "../lib/onboarding/secureProfile";
+import {
+  hasSavedOnboardingProfile,
+  ONBOARDING_PROFILE_KEY,
+} from "../lib/onboarding/secureProfile";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 const copy = {
@@ -32,19 +35,19 @@ const copy = {
     guestSubtitle: "You can explore Trinity without an account.",
     signedIn: "Signed in",
     signIn: "Sign in or create an account",
-    healthProfile: "Health profile",
-    profileCardTitle: "Optional profile",
+    controlHeading: "Always in your hands",
+    profileCardTitle: "Optional personalization",
     healthProfileHint:
       "Optional details can help personalize your learning. You choose what to share.",
-    checkingProfile: "Checking your account profile…",
+    checkingProfile: "Checking your saved profile details…",
     profileSaved: "Your optional profile is saved to your account.",
-    profileEmpty: "No health profile is saved to your account yet.",
-    profileGuest: "You can keep these answers on this device or save them to your account.",
-    editProfile: "Review health profile",
-    createProfile: "Set up optional profile",
-    preferences: "Preferences",
+    profileSavedOnDevice: "Your profile details are saved on this device.",
+    profileSavedOnDeviceNotAccount:
+      "Your profile details are saved on this device, not to your account.",
+    profileEmpty: "No profile details are saved yet.",
+    profileCheckFailed: "Couldn’t check for profile details saved on this device.",
+    profileCta: "Choose what feels relevant",
     language: "App language",
-    languageHint: "Choose the language you’d like to use.",
     amharic: "አማርኛ",
     amharicDetail: "Amharic",
     english: "English",
@@ -53,10 +56,9 @@ const copy = {
     savedCount: (count: number) => `${count} ${count === 1 ? "lesson" : "lessons"} saved`,
     savedHint: "Lessons you bookmarked to revisit.",
     privacy: "Privacy & data",
-    privacyCardTitle: "Your data, your choice",
+    privacyCardTitle: "Only on your device",
     privacyCopy:
       "Your account profile is saved when you choose to save it. Remembered onboarding answers on this device are separate.",
-    deviceDataLabel: "On this device",
     privacyDetail:
       "Clear device data resets this app’s language and saved lesson selections, and removes any onboarding answers remembered on this device. It does not delete your account profile.",
     clearData: "Clear device data",
@@ -64,12 +66,9 @@ const copy = {
     clearFailed: "Could not remove the remembered profile. Please try again.",
     more: "More",
     askOpal: "Ask Opal",
-    askOpalHint: "General health education and learning support.",
     staffPortal: "Staff portal (demo)",
     staffPortalHint: "For Trinity team members.",
-    accountActions: "Account actions",
     signOut: "Sign out",
-    signOutHint: "Return to the family app. Your account stays saved.",
     signOutError: "Could not sign out. Check your connection and try again.",
     confirmClearTitle: "Clear device data?",
     confirmClearCopy:
@@ -94,19 +93,19 @@ const copy = {
     guestSubtitle: "መለያ ሳይኖርዎትም ትሪኒቲን መጠቀም ይችላሉ።",
     signedIn: "ገብተዋል",
     signIn: "ይግቡ ወይም መለያ ይፍጠሩ",
-    healthProfile: "የጤና መገለጫ",
-    profileCardTitle: "አማራጭ መገለጫ",
+    controlHeading: "እርስዎ ይቆጣጠሩታል",
+    profileCardTitle: "አማራጭ ግላዊ ምርጫ",
     healthProfileHint:
       "አማራጭ መረጃዎች ትምህርቶችን ለእርስዎ ለማበጀት ይረዳሉ። ምን እንደሚያጋሩ እርስዎ ይወስናሉ።",
-    checkingProfile: "የመለያ መገለጫዎን በመፈተሽ ላይ…",
+    checkingProfile: "የተቀመጡ የመገለጫ ዝርዝሮችን በመፈተሽ ላይ…",
     profileSaved: "አማራጭ መገለጫዎ በመለያዎ ውስጥ ተቀምጧል።",
-    profileEmpty: "እስካሁን በመለያዎ ውስጥ የጤና መገለጫ አልተቀመጠም።",
-    profileGuest: "መልሶቹን በዚህ መሣሪያ ማስቀመጥ ወይም ወደ መለያዎ ማስቀመጥ ይችላሉ።",
-    editProfile: "የጤና መገለጫን ይመልከቱ",
-    createProfile: "አማራጭ መገለጫ ይጀምሩ",
-    preferences: "ምርጫዎች",
+    profileSavedOnDevice: "የመገለጫ ዝርዝሮችዎ በዚህ መሣሪያ ላይ ተቀምጠዋል።",
+    profileSavedOnDeviceNotAccount:
+      "የመገለጫ ዝርዝሮችዎ በዚህ መሣሪያ ላይ ተቀምጠዋል፤ ወደ መለያዎ አልተቀመጡም።",
+    profileEmpty: "እስካሁን ምንም የመገለጫ ዝርዝሮች አልተቀመጡም።",
+    profileCheckFailed: "በዚህ መሣሪያ ላይ የተቀመጡ ዝርዝሮችን መፈተሽ አልተቻለም።",
+    profileCta: "ምርጫን ቀይር",
     language: "የመተግበሪያ ቋንቋ",
-    languageHint: "መጠቀም የሚፈልጉትን ቋንቋ ይምረጡ።",
     amharic: "አማርኛ",
     amharicDetail: "Amharic",
     english: "English",
@@ -115,10 +114,9 @@ const copy = {
     savedCount: (count: number) => `${count} ትምህርት ተቀምጧል`,
     savedHint: "ለወደፊት ያስቀመጧቸው ትምህርቶች።",
     privacy: "ግላዊነት እና ውሂብ",
-    privacyCardTitle: "ውሂብዎ እና ምርጫዎ",
+    privacyCardTitle: "በእርስዎ መሣሪያ ብቻ",
     privacyCopy:
       "ወደ መለያዎ ለማስቀመጥ ሲመርጡ መገለጫዎ ይቀመጣል። በዚህ መሣሪያ የሚታወሱ መልሶች የተለዩ ናቸው።",
-    deviceDataLabel: "በዚህ መሣሪያ ላይ",
     privacyDetail:
       "የመሣሪያ ውሂብን ማጥፋት የቋንቋ እና የተቀመጡ ትምህርቶች ምርጫዎችን ይጀምራል፣ በመሣሪያው የታወሱ መልሶችንም ያስወግዳል። የመለያ መገለጫዎን አያጠፋም።",
     clearData: "የመሣሪያ ውሂብ አጥፋ",
@@ -126,12 +124,9 @@ const copy = {
     clearFailed: "የታወሰውን መገለጫ ማስወገድ አልተቻለም። እንደገና ይሞክሩ።",
     more: "ተጨማሪ",
     askOpal: "ኦፓልን ይጠይቁ",
-    askOpalHint: "አጠቃላይ የጤና ትምህርት እና የመማር ድጋፍ።",
     staffPortal: "የሠራተኛ መግቢያ (ሙከራ)",
     staffPortalHint: "ለትሪኒቲ ቡድን አባላት።",
-    accountActions: "የመለያ እርምጃዎች",
     signOut: "ውጣ",
-    signOutHint: "ወደ ቤተሰብ መተግበሪያ ይመለሱ። መለያዎ አይጠፋም።",
     signOutError: "መውጣት አልተቻለም። ግንኙነትዎን ያረጋግጡና እንደገና ይሞክሩ።",
     confirmClearTitle: "የመሣሪያ ውሂብ ይጠፋ?",
     confirmClearCopy:
@@ -149,6 +144,7 @@ const copy = {
 } as const;
 
 type ConfirmAction = "clear" | "signOut" | null;
+type DeviceProfileState = "checking" | "saved" | "empty" | "unavailable";
 
 export default function ProfileSettingsScreen() {
   const router = useRouter();
@@ -168,6 +164,8 @@ export default function ProfileSettingsScreen() {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [notice, setNotice] = useState<"cleared" | null>(null);
+  const [deviceProfileState, setDeviceProfileState] =
+    useState<DeviceProfileState>("checking");
   const am = language === "am";
   const text = copy[language];
   const displayName =
@@ -175,6 +173,55 @@ export default function ProfileSettingsScreen() {
   const email = user?.primaryEmailAddress?.emailAddress;
   const initial = displayName.trim().slice(0, 1).toLocaleUpperCase();
 
+  useFocusEffect(
+    useCallback(() => {
+      let isCurrent = true;
+      setDeviceProfileState("checking");
+
+      const loadDeviceProfile = async () => {
+        if (Platform.OS === "web") {
+          setDeviceProfileState("empty");
+          return;
+        }
+
+        try {
+          const storedProfile = await SecureStore.getItemAsync(
+            ONBOARDING_PROFILE_KEY,
+          );
+          if (!isCurrent) return;
+          setDeviceProfileState(
+            storedProfile && hasSavedOnboardingProfile(storedProfile)
+              ? "saved"
+              : "empty",
+          );
+        } catch {
+          if (isCurrent) setDeviceProfileState("unavailable");
+        }
+      };
+
+      void loadDeviceProfile();
+      return () => {
+        isCurrent = false;
+      };
+    }, []),
+  );
+
+  const accountProfileSaved = Boolean(isSignedIn && accountProfile);
+  const profileStatusLoading =
+    !authReady ||
+    (isSignedIn && accountProfile === undefined) ||
+    deviceProfileState === "checking";
+  const profileStatusMessage = profileStatusLoading
+    ? text.checkingProfile
+    : accountProfileSaved
+      ? text.profileSaved
+      : deviceProfileState === "saved"
+        ? isSignedIn
+          ? text.profileSavedOnDeviceNotAccount
+          : text.profileSavedOnDevice
+        : deviceProfileState === "unavailable"
+          ? text.profileCheckFailed
+          : text.profileEmpty;
   const openConfirm = (action: Exclude<ConfirmAction, null>) => {
     setActionError("");
     setNotice(null);
@@ -195,6 +242,7 @@ export default function ProfileSettingsScreen() {
         await SecureStore.deleteItemAsync(ONBOARDING_PROFILE_KEY);
       }
       clearLocalData();
+      setDeviceProfileState("empty");
       setConfirmAction(null);
       setNotice("cleared");
     } catch {
@@ -273,6 +321,19 @@ export default function ProfileSettingsScreen() {
               ) : null}
             </View>
           </View>
+          {authReady && isSignedIn ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openConfirm("signOut")}
+              style={({ pressed }) => [
+                styles.signOutButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#4B5C51" />
+              <Text style={styles.signOutText}>{text.signOut}</Text>
+            </Pressable>
+          ) : null}
           {authReady && !isSignedIn ? (
             <Pressable
               accessibilityRole="button"
@@ -287,93 +348,61 @@ export default function ProfileSettingsScreen() {
             >
               <Ionicons name="person-circle-outline" size={19} color="#FFFFFF" />
               <Text style={styles.signInButtonText}>{text.signIn}</Text>
-              <Ionicons
-                name={am ? "arrow-back" : "arrow-forward"}
-                size={16}
-                color="#FFFFFF"
-              />
+              <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
             </Pressable>
           ) : null}
         </View>
 
         <View style={styles.section}>
-          <SectionHeading title={text.healthProfile} />
-          <View style={styles.card}>
-            <View style={styles.cardIcon}>
-              <Ionicons name="heart-outline" size={19} color="#0E7A33" />
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>{text.profileCardTitle}</Text>
-              <Text style={styles.cardSummary}>{text.healthProfileHint}</Text>
-              <View style={styles.profileStatus}>
+          <SectionHeading title={text.controlHeading} />
+          <View style={styles.profileCard}>
+            <View style={styles.profileCardHeader}>
+              <View style={styles.cardIcon}>
                 <Ionicons
-                  name={
-                    !authReady || (isSignedIn && accountProfile === undefined)
-                      ? "time-outline"
-                      : isSignedIn && accountProfile
-                        ? "checkmark-circle-outline"
-                        : "information-circle-outline"
-                  }
-                  size={17}
-                  color="#2F8F4E"
+                  name="shield-checkmark-outline"
+                  size={19}
+                  color="#0E7A33"
                 />
-                <Text style={styles.profileStatusText}>
-                  {!authReady
-                    ? text.checkingProfile
-                    : isSignedIn
-                      ? accountProfile === undefined
-                        ? text.checkingProfile
-                        : accountProfile
-                          ? text.profileSaved
-                          : text.profileEmpty
-                      : text.profileGuest}
-                </Text>
               </View>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push("/onboarding?source=profile" as Href)}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.secondaryButtonText}>
-                  {isSignedIn && accountProfile ? text.editProfile : text.createProfile}
-                </Text>
-                <Ionicons
-                  name={am ? "arrow-back" : "arrow-forward"}
-                  size={15}
-                  color="#0A5C26"
-                />
-              </Pressable>
+              <View style={styles.cardBody}>
+                <Text style={styles.cardTitle}>{text.profileCardTitle}</Text>
+                <Text style={styles.cardSummary}>{text.healthProfileHint}</Text>
+              </View>
             </View>
+            <View style={styles.profileStatus}>
+              <Text style={styles.profileStatusText}>{profileStatusMessage}</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/onboarding?source=profile" as Href)}
+              style={({ pressed }) => [
+                styles.secondaryButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.secondaryButtonContent}>
+                <Text style={styles.secondaryButtonText}>{text.profileCta}</Text>
+                <Ionicons name="arrow-forward" size={16} color="#0A5C26" />
+              </View>
+            </Pressable>
           </View>
         </View>
 
         <View style={styles.section}>
-          <SectionHeading title={text.preferences} />
-          <View style={styles.card}>
-            <View style={styles.cardIcon}>
-              <Ionicons name="language-outline" size={19} color="#0E7A33" />
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>{text.language}</Text>
-              <Text style={styles.cardSummary}>{text.languageHint}</Text>
-              <View accessibilityRole="radiogroup" style={styles.languageRow}>
-                <LanguageOption
-                  label={text.amharic}
-                  detail={text.amharicDetail}
-                  selected={am}
-                  onPress={() => setLanguage("am")}
-                />
-                <LanguageOption
-                  label={text.english}
-                  detail={text.englishDetail}
-                  selected={!am}
-                  onPress={() => setLanguage("en")}
-                />
-              </View>
-            </View>
+          <SectionHeading title={text.language} />
+          <View accessibilityRole="radiogroup" style={styles.languageRow}>
+            <LanguageOption
+              label={text.amharic}
+              detail={text.amharicDetail}
+              selected={am}
+              onPress={() => setLanguage("am")}
+            />
+            <LanguageOption
+              label={text.english}
+              detail={text.englishDetail}
+              selected={!am}
+              onPress={() => setLanguage("en")}
+            />
           </View>
         </View>
 
@@ -396,7 +425,7 @@ export default function ProfileSettingsScreen() {
               <Text style={styles.cardSummary}>{text.savedHint}</Text>
             </View>
             <Ionicons
-              name={am ? "chevron-back" : "chevron-forward"}
+              name="chevron-forward"
               size={18}
               color="#4B5C51"
             />
@@ -405,97 +434,57 @@ export default function ProfileSettingsScreen() {
 
         <View style={styles.section}>
           <SectionHeading title={text.privacy} />
-          <View style={styles.card}>
-            <View style={styles.cardIcon}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={19}
-                color="#0E7A33"
-              />
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={styles.cardTitle}>{text.privacyCardTitle}</Text>
-              <Text style={styles.bodyCopy}>{text.privacyCopy}</Text>
-              <View style={styles.deviceDataNote}>
+          <View style={styles.privacyCard}>
+            <View style={styles.privacyCardHeader}>
+              <View style={styles.cardIcon}>
                 <Ionicons
-                  name="phone-portrait-outline"
-                  size={17}
-                  color="#2F8F4E"
+                  name="lock-closed-outline"
+                  size={19}
+                  color="#0E7A33"
                 />
-                <View style={styles.deviceDataCopy}>
-                  <Text style={styles.deviceDataTitle}>{text.deviceDataLabel}</Text>
-                  <Text style={styles.bodyCopy}>{text.privacyDetail}</Text>
-                </View>
               </View>
-              {notice ? (
-                <View style={styles.notice}>
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={17}
-                    color="#0E7A33"
-                  />
-                  <Text style={styles.noticeText}>{text.cleared}</Text>
-                </View>
-              ) : null}
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => openConfirm("clear")}
-                style={({ pressed }) => [
-                  styles.dangerButton,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons name="trash-outline" size={16} color="#B3261E" />
-                <Text style={styles.dangerButtonText}>{text.clearData}</Text>
-              </Pressable>
+              <View style={styles.cardBody}>
+                <Text style={styles.cardTitle}>{text.privacyCardTitle}</Text>
+                <Text style={styles.cardSummary}>{text.privacyCopy}</Text>
+              </View>
             </View>
+            <View style={styles.deviceDataNote}>
+              <Text style={styles.bodyCopy}>{text.privacyDetail}</Text>
+            </View>
+            {notice ? (
+              <View style={styles.notice}>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={17}
+                  color="#0E7A33"
+                />
+                <Text style={styles.noticeText}>{text.cleared}</Text>
+              </View>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => openConfirm("clear")}
+              style={({ pressed }) => [
+                styles.dangerButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons name="trash-outline" size={16} color="#B3261E" />
+              <Text style={styles.dangerButtonText}>{text.clearData}</Text>
+            </Pressable>
           </View>
         </View>
 
         <View style={styles.section}>
           <SectionHeading title={text.more} />
           <ActionRow
-            icon="chatbubble-ellipses-outline"
-            title={text.askOpal}
-            subtitle={text.askOpalHint}
-            onPress={() =>
-              router.push(
-                (isSignedIn ? "/(app)/(tabs)/opal" : "/public/opal") as Href,
-              )
-            }
-            am={am}
-          />
-          <ActionRow
             icon="briefcase-outline"
             title={text.staffPortal}
             subtitle={text.staffPortalHint}
             onPress={() => router.push("/staff-portal" as Href)}
-            am={am}
           />
         </View>
 
-        {authReady && isSignedIn ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{text.accountActions}</Text>
-            <Text style={styles.sectionHint}>{text.signOutHint}</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => openConfirm("signOut")}
-              style={({ pressed }) => [
-                styles.signOutButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Ionicons name="log-out-outline" size={18} color="#4B5C51" />
-              <Text style={styles.signOutText}>{text.signOut}</Text>
-              <Ionicons
-                name={am ? "arrow-back" : "arrow-forward"}
-                size={15}
-                color="#738278"
-              />
-            </Pressable>
-          </View>
-        ) : null}
         <View style={styles.footer}>
           <Image
             source={require("../assets/images/trinity-symbol.png")}
@@ -507,6 +496,20 @@ export default function ProfileSettingsScreen() {
         </View>
         <View style={styles.bottomSpace} />
       </ScrollView>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={text.askOpal}
+        onPress={() =>
+          router.push(
+            (isSignedIn ? "/(app)/(tabs)/opal" : "/public/opal") as Href,
+          )
+        }
+        style={({ pressed }) => [styles.opalFab, pressed && styles.pressed]}
+      >
+        <Ionicons name="chatbubble-outline" size={21} color="#FFFFFF" />
+        <Text style={styles.opalFabText}>{text.askOpal}</Text>
+      </Pressable>
 
       <Modal
         transparent
@@ -632,13 +635,11 @@ function ActionRow({
   title,
   subtitle,
   onPress,
-  am,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
   onPress: () => void;
-  am: boolean;
 }) {
   return (
     <Pressable
@@ -647,29 +648,25 @@ function ActionRow({
       style={({ pressed }) => [styles.actionRow, pressed && styles.pressed]}
     >
       <View style={styles.cardIcon}>
-      <Ionicons name={icon} size={18} color="#0E7A33" />
+        <Ionicons name={icon} size={18} color="#0E7A33" />
       </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle}>{title}</Text>
         <Text style={styles.cardSummary}>{subtitle}</Text>
       </View>
-      <Ionicons
-        name={am ? "chevron-back" : "chevron-forward"}
-        size={18}
-        color="#4B5C51"
-      />
+      <Ionicons name="chevron-forward" size={18} color="#4B5C51" />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#F7FBF7" },
+  safeArea: { flex: 1, backgroundColor: "#F7FBF7", position: "relative" },
   content: {
     alignSelf: "center",
     maxWidth: 560,
     paddingHorizontal: 18,
     paddingTop: 18,
-    paddingBottom: 24,
+    paddingBottom: 88,
     width: "100%",
   },
   brandRow: {
@@ -790,7 +787,6 @@ const styles = StyleSheet.create({
   },
   signInButtonText: {
     color: "#FFFFFF",
-    flex: 1,
     fontFamily: "Righteous_400Regular",
     fontSize: 13,
     textAlign: "center",
@@ -804,6 +800,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 13,
     padding: 16,
+  },
+  profileCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D5E6D3",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
+    padding: 16,
+  },
+  profileCardHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 13,
+  },
+  privacyCard: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D5E6D3",
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 14,
+    padding: 16,
+  },
+  privacyCardHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 13,
   },
   cardIcon: {
     alignItems: "center",
@@ -828,45 +850,44 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   profileStatus: {
-    alignItems: "flex-start",
     backgroundColor: "#F4F9F5",
     borderColor: "#D5E6D3",
     borderRadius: 12,
     borderStyle: "dashed",
     borderWidth: 1,
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12,
-    padding: 11,
+    padding: 12,
   },
   profileStatusText: {
     color: "#4B5C51",
-    flex: 1,
     fontFamily: "Righteous_400Regular",
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   secondaryButton: {
     alignItems: "center",
+    alignSelf: "stretch",
     backgroundColor: "#FFFFFF",
     borderColor: "#D5E6D3",
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: 18,
+  },
+  secondaryButtonContent: {
+    alignItems: "center",
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
-    marginTop: 13,
-    minHeight: 48,
-    paddingHorizontal: 12,
   },
   secondaryButtonText: {
     color: "#0A5C26",
-    flex: 1,
+    flexShrink: 1,
     fontFamily: "Righteous_400Regular",
-    fontSize: 13,
+    fontSize: 14,
     textAlign: "center",
   },
-  languageRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  languageRow: { flexDirection: "row", gap: 10 },
   languageOption: {
     alignItems: "flex-start",
     backgroundColor: "#FFFFFF",
@@ -913,25 +934,15 @@ const styles = StyleSheet.create({
     fontFamily: "Righteous_400Regular",
     fontSize: 12,
     lineHeight: 19,
-    marginTop: 6,
+    marginTop: 0,
   },
   deviceDataNote: {
-    alignItems: "flex-start",
     backgroundColor: "#F4F9F5",
     borderColor: "#D5E6D3",
     borderRadius: 12,
     borderStyle: "dashed",
     borderWidth: 1,
-    flexDirection: "row",
-    gap: 9,
-    marginTop: 13,
     padding: 12,
-  },
-  deviceDataCopy: { flex: 1, minWidth: 0 },
-  deviceDataTitle: {
-    color: "#0A5C26",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 13,
   },
   notice: {
     alignItems: "center",
@@ -939,7 +950,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     flexDirection: "row",
     gap: 8,
-    marginTop: 12,
     padding: 12,
   },
   noticeText: {
@@ -951,21 +961,21 @@ const styles = StyleSheet.create({
   },
   dangerButton: {
     alignItems: "center",
+    alignSelf: "stretch",
     backgroundColor: "#FFFFFF",
     borderColor: "#B3261E",
-    borderRadius: 13,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: "row",
     gap: 8,
     justifyContent: "center",
-    marginTop: 14,
-    minHeight: 48,
-    paddingHorizontal: 12,
+    minHeight: 52,
+    paddingHorizontal: 18,
   },
   dangerButtonText: {
     color: "#B3261E",
     fontFamily: "Righteous_400Regular",
-    fontSize: 13,
+    fontSize: 14,
   },
   actionRow: {
     alignItems: "center",
@@ -981,18 +991,20 @@ const styles = StyleSheet.create({
   },
   signOutButton: {
     alignItems: "center",
+    alignSelf: "stretch",
     backgroundColor: "#FFFFFF",
     borderColor: "#D5E6D3",
     borderRadius: 15,
     borderWidth: 1,
     flexDirection: "row",
     gap: 10,
-    minHeight: 54,
+    justifyContent: "center",
+    marginTop: 10,
+    minHeight: 52,
     paddingHorizontal: 16,
   },
   signOutText: {
     color: "#4B5C51",
-    flex: 1,
     fontFamily: "Righteous_400Regular",
     fontSize: 13,
   },
@@ -1015,6 +1027,31 @@ const styles = StyleSheet.create({
     fontFamily: "Righteous_400Regular",
     fontSize: 11,
     marginTop: 4,
+  },
+  opalFab: {
+    alignItems: "center",
+    backgroundColor: "#0E7A33",
+    borderColor: "#7DC21E",
+    borderRadius: 999,
+    borderWidth: 2,
+    bottom: 14,
+    elevation: 8,
+    flexDirection: "row",
+    gap: 8,
+    height: 52,
+    paddingHorizontal: 16,
+    position: "absolute",
+    right: 16,
+    shadowColor: "#0E7A33",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    zIndex: 15,
+  },
+  opalFabText: {
+    color: "#FFFFFF",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 14,
   },
   bottomSpace: { height: 16 },
   pressed: { opacity: 0.78 },

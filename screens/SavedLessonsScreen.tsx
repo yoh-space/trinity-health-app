@@ -30,11 +30,7 @@ export default function SavedLessonsScreen() {
           onPress={() => router.back()}
           style={styles.backButton}
         >
-          <Ionicons
-            name={am ? "arrow-forward" : "arrow-back"}
-            size={18}
-            color="#345B40"
-          />
+          <Ionicons name="arrow-back" size={18} color="#345B40" />
         </Pressable>
         <Text style={styles.eyebrow}>TRINITY</Text>
         <Text style={styles.title}>
