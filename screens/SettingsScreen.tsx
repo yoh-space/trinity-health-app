@@ -110,7 +110,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
+    <SafeAreaView edges={["top", "left", "right", "bottom"]} style={styles.safeArea}>
       <View style={styles.page}>
         <View style={styles.header}>
           <Pressable
@@ -119,7 +119,7 @@ export default function SettingsScreen() {
             onPress={() => router.replace("/public/home" as Href)}
             style={styles.headerIcon}
           >
-            <Ionicons name={am ? "arrow-forward" : "arrow-back"} size={18} color="#345B40" />
+            <Ionicons name={am ? "arrow-forward" : "arrow-back"} size={19} color="#345B40" />
           </Pressable>
           <View style={styles.brand}>
             <Image
@@ -129,19 +129,21 @@ export default function SettingsScreen() {
             />
             <View style={styles.brandCopy}>
               <Text style={styles.brandName}>Trinity Health Solution</Text>
-              <Text style={styles.brandTag}>A LITTLE LEARNING. A LOT OF CARE.</Text>
+              <Text style={styles.brandTag}>A little learning. A lot of care.</Text>
             </View>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={text.saved}
-            onPress={() => router.push("/public/saved" as Href)}
-            style={styles.headerIcon}
-          >
-            <Ionicons name="bookmark-outline" size={18} color="#365B41" />
-          </Pressable>
-          <View style={[styles.headerIcon, styles.headerIconActive]}>
-            <Ionicons name="settings-outline" size={18} color="#087A3D" />
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={text.saved}
+              onPress={() => router.push("/public/saved" as Href)}
+              style={styles.headerIcon}
+            >
+              <Ionicons name="bookmark-outline" size={19} color="#365B41" />
+            </Pressable>
+            <View style={[styles.headerIcon, styles.headerIconActive]}>
+              <Ionicons name="settings-outline" size={19} color="#087A3D" />
+            </View>
           </View>
         </View>
 
@@ -324,138 +326,144 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#F7FAF7" },
   page: { flex: 1 },
   header: {
-    minHeight: 49,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 10,
+    gap: 8,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#E4ECE5",
   },
   headerIcon: {
-    width: 30,
-    height: 34,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: "#E2EAE3",
+    backgroundColor: "#FFFFFF",
   },
   headerIconActive: { backgroundColor: "#EAF4EB" },
-  brand: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+  brand: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 7 },
   brandMark: {
-    width: 27,
-    height: 27,
+    width: 31,
+    height: 31,
   },
-  brandCopy: { flex: 1, gap: 2 },
-  brandName: { color: "#285638", fontFamily: "Righteous_400Regular", fontSize: 9 },
-  brandTag: { color: "#7D9581", fontFamily: "Righteous_400Regular", fontSize: 5, letterSpacing: 0.5 },
-  content: { paddingHorizontal: 15, paddingTop: 13, paddingBottom: 88 },
-  eyebrow: { color: "#438451", fontFamily: "Righteous_400Regular", fontSize: 8, letterSpacing: 0.8 },
-  title: { color: "#1D3023", fontFamily: "Righteous_400Regular", fontSize: 21, lineHeight: 26, marginTop: 4 },
-  section: { marginTop: 15 },
-  sectionTitle: { color: "#283D2D", fontFamily: "Righteous_400Regular", fontSize: 12, marginBottom: 8 },
-  languageRow: { flexDirection: "row", gap: 8 },
+  brandCopy: { flex: 1, minWidth: 0, gap: 2 },
+  brandName: { color: "#23472E", fontFamily: "Righteous_400Regular", fontSize: 11 },
+  brandTag: { color: "#77867A", fontFamily: "Righteous_400Regular", fontSize: 7 },
+  headerActions: { flexDirection: "row", gap: 8 },
+  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 96 },
+  eyebrow: { color: "#438451", fontFamily: "Righteous_400Regular", fontSize: 10, letterSpacing: 0.8 },
+  title: { color: "#1D3023", fontFamily: "Righteous_400Regular", fontSize: 24, lineHeight: 31, marginTop: 5 },
+  section: { marginTop: 20 },
+  sectionTitle: { color: "#283D2D", fontFamily: "Righteous_400Regular", fontSize: 15, lineHeight: 21, marginBottom: 9 },
+  languageRow: { flexDirection: "row", gap: 10 },
   languageOption: {
-    minHeight: 54,
+    minHeight: 72,
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E1E9E2",
-    backgroundColor: "#FFFFFF",
-  },
-  languageOptionSelected: { backgroundColor: "#EEF7EF", borderColor: "#82B28A" },
-  languageOptionCopy: { flex: 1 },
-  languageTitle: { color: "#2D4934", fontFamily: "Righteous_400Regular", fontSize: 10 },
-  languageSubtitle: { color: "#718075", fontFamily: "Righteous_400Regular", fontSize: 7, lineHeight: 10, marginTop: 3 },
-  card: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 9,
-    padding: 11,
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: "#E1E9E2",
     backgroundColor: "#FFFFFF",
   },
+  languageOptionSelected: { backgroundColor: "#EEF7EF", borderColor: "#82B28A" },
+  languageOptionCopy: { flex: 1, minWidth: 0 },
+  languageTitle: { color: "#2D4934", fontFamily: "Righteous_400Regular", fontSize: 12 },
+  languageSubtitle: { color: "#718075", fontFamily: "Righteous_400Regular", fontSize: 9, lineHeight: 13, marginTop: 4 },
+  card: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E1E9E2",
+    backgroundColor: "#FFFFFF",
+  },
   cardIcon: {
-    width: 29,
-    height: 29,
+    width: 36,
+    height: 36,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 9,
+    borderRadius: 12,
     backgroundColor: "#EAF4EB",
   },
-  cardBody: { flex: 1 },
-  cardTitle: { color: "#2C4332", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15 },
-  cardSummary: { color: "#728075", fontFamily: "Righteous_400Regular", fontSize: 8, lineHeight: 12, marginTop: 2 },
-  bodyCopy: { color: "#738176", fontFamily: "Righteous_400Regular", fontSize: 8, lineHeight: 13, marginTop: 5 },
+  cardBody: { flex: 1, minWidth: 0 },
+  cardTitle: { color: "#2C4332", fontFamily: "Righteous_400Regular", fontSize: 12, lineHeight: 18 },
+  cardSummary: { color: "#728075", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15, marginTop: 4 },
+  bodyCopy: { color: "#738176", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 16, marginTop: 7 },
   secondaryButton: {
-    minHeight: 34,
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    marginTop: 9,
-    borderRadius: 9,
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 10,
+    borderRadius: 11,
     borderWidth: 1,
     borderColor: "#DDE8DE",
     backgroundColor: "#F8FBF8",
   },
-  secondaryButtonText: { color: "#315E3C", fontFamily: "Righteous_400Regular", fontSize: 9 },
-  divider: { height: 1, backgroundColor: "#E9EEEA", marginTop: 9, marginBottom: 3 },
+  secondaryButtonText: { color: "#315E3C", fontFamily: "Righteous_400Regular", fontSize: 11 },
+  divider: { height: 1, backgroundColor: "#E9EEEA", marginTop: 12, marginBottom: 4 },
   dangerButton: {
-    minHeight: 34,
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    marginTop: 10,
-    borderRadius: 9,
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 10,
+    borderRadius: 11,
     borderWidth: 1,
     borderColor: "#E6BDBA",
     backgroundColor: "#FFF9F8",
   },
-  dangerButtonText: { color: "#A8423C", fontFamily: "Righteous_400Regular", fontSize: 9 },
-  notice: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 9, paddingHorizontal: 3 },
+  dangerButtonText: { color: "#A8423C", fontFamily: "Righteous_400Regular", fontSize: 11 },
+  notice: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingHorizontal: 3 },
   errorNotice: { alignItems: "flex-start" },
-  noticeText: { flex: 1, color: "#287345", fontFamily: "Righteous_400Regular", fontSize: 8, lineHeight: 12 },
+  noticeText: { flex: 1, color: "#287345", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15 },
   errorText: { color: "#A8423C" },
   staffButton: {
-    minHeight: 40,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 14,
-    paddingHorizontal: 11,
-    borderRadius: 11,
+    gap: 10,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: "#DDE7DE",
     backgroundColor: "#FFFFFF",
   },
-  staffButtonText: { flex: 1, color: "#42634A", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  staffButtonText: { flex: 1, color: "#42634A", fontFamily: "Righteous_400Regular", fontSize: 12 },
   opalButton: {
     position: "absolute",
-    right: 13,
-    bottom: 12,
-    minHeight: 36,
+    right: 16,
+    bottom: 14,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    gap: 8,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     backgroundColor: "#16803F",
     elevation: 5,
     shadowColor: "#123B20",
     shadowOpacity: 0.2,
     shadowRadius: 5,
   },
-  opalButtonText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  opalButtonText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 12 },
   bottomSpace: { height: 8 },
   pressed: { opacity: 0.78 },
   modalBackdrop: { flex: 1, justifyContent: "center", padding: 22, backgroundColor: "#15251A80" },
@@ -468,17 +476,17 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: "#FFF0EE",
   },
-  confirmTitle: { color: "#263D2D", fontFamily: "Righteous_400Regular", fontSize: 15, marginTop: 12 },
-  confirmCopy: { color: "#6E7D71", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15, marginTop: 6 },
+  confirmTitle: { color: "#263D2D", fontFamily: "Righteous_400Regular", fontSize: 17, lineHeight: 23, marginTop: 14 },
+  confirmCopy: { color: "#6E7D71", fontFamily: "Righteous_400Regular", fontSize: 12, lineHeight: 18, marginTop: 8 },
   confirmDangerButton: {
-    minHeight: 39,
+    minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 15,
-    borderRadius: 10,
+    marginTop: 18,
+    borderRadius: 12,
     backgroundColor: "#B0443E",
   },
-  confirmDangerText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 10 },
-  cancelButton: { alignItems: "center", padding: 11, marginTop: 2 },
-  cancelButtonText: { color: "#526957", fontFamily: "Righteous_400Regular", fontSize: 10 },
+  confirmDangerText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 12 },
+  cancelButton: { alignItems: "center", padding: 13, marginTop: 4 },
+  cancelButtonText: { color: "#526957", fontFamily: "Righteous_400Regular", fontSize: 12 },
 });
