@@ -1,8 +1,8 @@
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
-import { useRouter, type Href } from "expo-router";
-import { useState } from "react";
+import { usePathname, useRouter, type Href } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../convex/_generated/api";
+import { AUTHENTICATED_CARE_TAB } from "../constants/authRoutes";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 type RequestType = "clinical" | "counselling";
@@ -129,9 +130,24 @@ function isValidPhone(value: string) {
 
 export default function CareRequestScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const { isLoaded, isSignedIn } = useAuth();
   const language = useTrinityStore((state) => state.language);
+  const authReturnTo = useTrinityStore((state) => state.authReturnTo);
+  const setAuthReturnTo = useTrinityStore((state) => state.setAuthReturnTo);
   const t = copy[language];
+
+  useEffect(() => {
+    if (
+      pathname === "/care" &&
+      isLoaded &&
+      isSignedIn &&
+      authReturnTo === AUTHENTICATED_CARE_TAB
+    ) {
+      setAuthReturnTo(null);
+    }
+  }, [authReturnTo, isLoaded, isSignedIn, pathname, setAuthReturnTo]);
+
   const requests = useQuery(api.careRequests.listMine);
   const createRequest = useMutation(api.careRequests.create);
   const [requestType, setRequestType] = useState<RequestType>("clinical");
@@ -205,7 +221,10 @@ export default function CareRequestScreen() {
                 <Text style={styles.accessBody}>{t.signInBody}</Text>
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => router.push("/sign-in" as Href)}
+                  onPress={() => {
+                    setAuthReturnTo(AUTHENTICATED_CARE_TAB);
+                    router.push("/sign-in" as Href);
+                  }}
                   style={styles.accessButton}
                 >
                   <Text style={styles.accessButtonText}>{t.signInAction}</Text>

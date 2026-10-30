@@ -1,7 +1,13 @@
-import { Redirect } from "expo-router";
+import { Redirect, type Href } from "expo-router";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
+import { useTrinityStore } from "../store/useTrinityStore";
 
-// Clerk's default useSSO callback is `sso-callback`; route it back through
-// the auth layout so an activated session can continue into the app tabs.
+// Match Clerk's callback route pattern from mez-app, returning to the
+// destination selected before OAuth started.
 export default function SSOCallbackRoute() {
-  return <Redirect href="/(auth)/sign-in" />;
+  const authReturnTo = useTrinityStore((state) => state.authReturnTo);
+
+  return (
+    <Redirect href={(authReturnTo ?? AUTHENTICATED_HOME_TABS) as Href} />
+  );
 }

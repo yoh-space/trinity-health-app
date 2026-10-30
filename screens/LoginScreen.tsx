@@ -3,19 +3,43 @@ import { StyleSheet, View, Text, TouchableOpacity, Image } from "react-native";
 import { useSSO } from "@clerk/expo";
 import { RFValue } from "react-native-responsive-fontsize";
 import { AntDesign } from "@expo/vector-icons";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import { useRouter, type Href } from "expo-router";
 import GoogleIcon from "../components/icons/GoogleIcon";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
+import { useTrinityStore } from "../store/useTrinityStore";
+
+WebBrowser.maybeCompleteAuthSession();
 
 type OAuthStrategy = "oauth_google" | "oauth_apple";
 
 const LoginScreen = () => {
+  const router = useRouter();
   const { startSSOFlow } = useSSO();
+  const authReturnTo = useTrinityStore((state) => state.authReturnTo);
 
   const onPress = async ({ strategy }: { strategy: OAuthStrategy }) => {
     try {
-      const { createdSessionId, setActive } = await startSSOFlow({ strategy });
+      const { createdSessionId, setActive } = await startSSOFlow({
+        strategy,
+        redirectUrl: AuthSession.makeRedirectUri({ path: "sso-callback" }),
+      });
       if (!createdSessionId || !setActive) return;
 
-      await setActive({ session: createdSessionId });
+      await setActive({
+        session: createdSessionId,
+        navigate: async ({ decorateUrl }) => {
+          const destination = authReturnTo ?? AUTHENTICATED_HOME_TABS;
+          const url = decorateUrl(destination);
+
+          if (url.startsWith("http") && typeof window !== "undefined") {
+            window.location.href = url;
+          } else {
+            router.replace(url as Href);
+          }
+        },
+      });
     } catch (err) {
       const message = String(err);
       if (message.includes("already signed in")) {
