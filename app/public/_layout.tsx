@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTrinityStore } from "../../store/useTrinityStore";
 
 export default function PublicTabs() {
   const language = useTrinityStore((state) => state.language);
+  const insets = useSafeAreaInsets();
   const am = language === "am";
 
   return (
@@ -33,8 +35,8 @@ export default function PublicTabs() {
           tabBarStyle: {
             backgroundColor: "#FFFFFF",
             borderTopColor: "#E3EBE4",
-            height: 66,
-            paddingBottom: 8,
+            height: 66 + insets.bottom,
+            paddingBottom: 8 + insets.bottom,
             paddingTop: 7,
           },
           tabBarLabelStyle: { fontFamily: "Righteous_400Regular", fontSize: 10 },

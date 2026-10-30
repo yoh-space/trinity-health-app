@@ -1,13 +1,21 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TrinityTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs screenOptions={({ route }) => ({
       headerShown: false,
       tabBarActiveTintColor: "#087A3D",
       tabBarInactiveTintColor: "#738278",
-      tabBarStyle: { borderTopColor: "#DCE9DE", height: 68, paddingTop: 8 },
+      tabBarStyle: {
+        borderTopColor: "#DCE9DE",
+        height: 68 + insets.bottom,
+        paddingBottom: insets.bottom,
+        paddingTop: 8,
+      },
       tabBarIcon: ({ color, size }) => {
         const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
           index: "home-outline",
