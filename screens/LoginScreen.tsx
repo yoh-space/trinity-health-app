@@ -3,13 +3,11 @@ import { StyleSheet, View, Text, TouchableOpacity, Image } from "react-native";
 import { useSSO } from "@clerk/expo";
 import { RFValue } from "react-native-responsive-fontsize";
 import { AntDesign } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import GoogleIcon from "../components/icons/GoogleIcon";
 
 type OAuthStrategy = "oauth_google" | "oauth_apple";
 
 const LoginScreen = () => {
-  const router = useRouter();
   const { startSSOFlow } = useSSO();
 
   const onPress = async ({ strategy }: { strategy: OAuthStrategy }) => {
@@ -18,7 +16,6 @@ const LoginScreen = () => {
       if (!createdSessionId || !setActive) return;
 
       await setActive({ session: createdSessionId });
-      router.replace("/(app)");
     } catch (err) {
       const message = String(err);
       if (message.includes("already signed in")) {
