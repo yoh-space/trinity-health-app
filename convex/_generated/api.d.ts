@@ -8,11 +8,15 @@
  * @module
  */
 
+import type * as ai_gemini from "../ai/gemini.js";
+import type * as ai_opalContext from "../ai/opalContext.js";
+import type * as ai_opalPrompt from "../ai/opalPrompt.js";
+import type * as careRequests from "../careRequests.js";
 import type * as education from "../education.js";
 import type * as educationSeedData from "../educationSeedData.js";
-import type * as careRequests from "../careRequests.js";
 import type * as notes from "../notes.js";
 import type * as onboarding from "../onboarding.js";
+import type * as opal from "../opal.js";
 import type * as openai from "../openai.js";
 import type * as seed from "../seed.js";
 import type * as utils from "../utils.js";
@@ -24,11 +28,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "ai/gemini": typeof ai_gemini;
+  "ai/opalContext": typeof ai_opalContext;
+  "ai/opalPrompt": typeof ai_opalPrompt;
   careRequests: typeof careRequests;
   education: typeof education;
   educationSeedData: typeof educationSeedData;
   notes: typeof notes;
   onboarding: typeof onboarding;
+  opal: typeof opal;
   openai: typeof openai;
   seed: typeof seed;
   utils: typeof utils;

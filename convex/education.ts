@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 
 const contentArgs = {
   title: v.string(),
@@ -70,6 +70,16 @@ function validateContent(args: {
 }
 
 export const listPublished = query({
+  args: {},
+  handler: async (ctx) =>
+    await ctx.db
+      .query("educationContent")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .order("desc")
+      .take(50),
+});
+
+export const listPublishedForOpal = internalQuery({
   args: {},
   handler: async (ctx) =>
     await ctx.db
