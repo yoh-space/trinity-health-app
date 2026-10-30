@@ -32,6 +32,7 @@ import {
   type OnboardingStep,
 } from "../components/onboarding/onboardingContent";
 import { calculateBmi } from "../lib/onboarding/bmi";
+import { ONBOARDING_PROFILE_KEY } from "../lib/onboarding/secureProfile";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 type OnboardingAnswers = {
@@ -68,8 +69,6 @@ const initialAnswers: OnboardingAnswers = {
   weightKg: "",
 };
 
-const secureProfileKey = "trinity-onboarding-profile";
-
 function toggleValue(values: string[], value: string, limit?: number) {
   if (values.includes(value)) return values.filter((item) => item !== value);
   if (limit && values.length >= limit) return values;
@@ -101,26 +100,59 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     if (savedProfile === undefined || profileLoaded) return;
-    setProfileLoaded(true);
-    if (profileEditStarted.current || step > 1) return;
-    if (!savedProfile) return;
+    if (profileEditStarted.current || step > 1) {
+      setProfileLoaded(true);
+      return;
+    }
 
-    setAnswers({
-      audience: savedProfile.audience ?? "",
-      age: savedProfile.age ?? "",
-      support: savedProfile.support ?? [],
-      generalSupport: savedProfile.generalSupport ?? false,
-      otherSupport: savedProfile.otherSupport ?? "",
-      meals: savedProfile.meals ?? "",
-      activity: savedProfile.activity ?? "",
-      eatingPatterns: savedProfile.eatingPatterns ?? [],
-      goals: savedProfile.goals ?? [],
-      otherGoal: savedProfile.otherGoal ?? "",
-      consultation: savedProfile.consultation ?? "",
-      otherConsultation: savedProfile.otherConsultation ?? "",
-      heightCm: savedProfile.heightCm?.toString() ?? "",
-      weightKg: savedProfile.weightKg?.toString() ?? "",
-    });
+    let isCurrent = true;
+    const loadProfile = async () => {
+      if (savedProfile) {
+        setAnswers({
+          audience: savedProfile.audience ?? "",
+          age: savedProfile.age ?? "",
+          support: savedProfile.support ?? [],
+          generalSupport: savedProfile.generalSupport ?? false,
+          otherSupport: savedProfile.otherSupport ?? "",
+          meals: savedProfile.meals ?? "",
+          activity: savedProfile.activity ?? "",
+          eatingPatterns: savedProfile.eatingPatterns ?? [],
+          goals: savedProfile.goals ?? [],
+          otherGoal: savedProfile.otherGoal ?? "",
+          consultation: savedProfile.consultation ?? "",
+          otherConsultation: savedProfile.otherConsultation ?? "",
+          heightCm: savedProfile.heightCm?.toString() ?? "",
+          weightKg: savedProfile.weightKg?.toString() ?? "",
+        });
+        setProfileLoaded(true);
+        return;
+      }
+
+      try {
+        const localValue = await SecureStore.getItemAsync(ONBOARDING_PROFILE_KEY);
+        if (!isCurrent || !localValue) return;
+        const localProfile = JSON.parse(localValue) as Partial<OnboardingAnswers>;
+        setAnswers({
+          ...initialAnswers,
+          ...localProfile,
+          support: Array.isArray(localProfile.support) ? localProfile.support : [],
+          eatingPatterns: Array.isArray(localProfile.eatingPatterns)
+            ? localProfile.eatingPatterns
+            : [],
+          goals: Array.isArray(localProfile.goals) ? localProfile.goals : [],
+        });
+        setRememberOnDevice(true);
+      } catch (error) {
+        console.error("Unable to load onboarding answers from this device.", error);
+      } finally {
+        if (isCurrent) setProfileLoaded(true);
+      }
+    };
+
+    void loadProfile();
+    return () => {
+      isCurrent = false;
+    };
   }, [savedProfile, profileLoaded, step]);
 
   const update = <K extends keyof OnboardingAnswers>(
@@ -207,11 +239,11 @@ export default function OnboardingScreen() {
       try {
         if (rememberOnDevice) {
           await SecureStore.setItemAsync(
-            secureProfileKey,
+            ONBOARDING_PROFILE_KEY,
             JSON.stringify({ ...answers, language, updatedAt: Date.now() }),
           );
         } else {
-          await SecureStore.deleteItemAsync(secureProfileKey);
+          await SecureStore.deleteItemAsync(ONBOARDING_PROFILE_KEY);
         }
       } catch (error) {
         console.error("Unable to save onboarding answers on this device.", error);

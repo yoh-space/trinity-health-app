@@ -10,6 +10,7 @@ type TrinityState = {
   setLanguage: (language: Language) => void;
   toggleSaved: (id: string) => void;
   setAuthReturnTo: (route: AuthReturnRoute | null) => void;
+  clearLocalData: () => void;
 };
 
 export const useTrinityStore = create<TrinityState>((set) => ({
@@ -24,4 +25,5 @@ export const useTrinityStore = create<TrinityState>((set) => ({
         : [...state.savedIds, id],
     })),
   setAuthReturnTo: (authReturnTo) => set({ authReturnTo }),
+  clearLocalData: () => set({ language: "am", savedIds: [] }),
 }));

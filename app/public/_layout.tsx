@@ -57,6 +57,7 @@ export default function PublicTabs() {
       <Tabs.Screen name="care" />
       <Tabs.Screen name="saved" options={{ href: null }} />
       <Tabs.Screen name="opal" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ href: null }} />
       <Tabs.Screen
         name="article/[articleId]"
         options={{ href: null, tabBarStyle: { display: "none" } }}

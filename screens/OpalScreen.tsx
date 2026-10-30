@@ -227,14 +227,7 @@ export default function OpalScreen() {
             language={language}
             onHomePress={() => router.replace("/public/home" as Href)}
             onSavedPress={() => router.push("/public/saved" as Href)}
-            onSettingsPress={() =>
-              Alert.alert(
-                am ? "ቅንብሮች" : "Settings",
-                am
-                  ? "የቋንቋ ቅንብሮችን ከመነሻ ገጽ ይክፈቱ።"
-                  : "Open the language settings from the Home screen.",
-              )
-            }
+            onSettingsPress={() => router.push("/public/settings" as Href)}
           />
         </View>
         <ScrollView

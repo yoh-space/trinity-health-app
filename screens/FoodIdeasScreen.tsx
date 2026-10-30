@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { GuestChoiceChip } from "../components/public/GuestChoiceChip";
 import { useTrinityStore } from "../store/useTrinityStore";
 
@@ -22,16 +22,13 @@ const recipes = [
 
 export default function FoodIdeasScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const language = useTrinityStore((state) => state.language);
-  const setLanguage = useTrinityStore((state) => state.setLanguage);
   const am = language === "am";
   const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
   const [audience, setAudience] = useState<"family" | "child">("family");
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
   const [noKnownAllergies, setNoKnownAllergies] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
-  const [settingsVisible, setSettingsVisible] = useState(false);
   const [error, setError] = useState("");
 
   const toggleIngredient = (id: string) => { setError(""); setHasGenerated(false); setSelectedIngredients((items) => items.includes(id) ? items.filter((item) => item !== id) : [...items, id]); };
@@ -45,7 +42,7 @@ export default function FoodIdeasScreen() {
       <View style={styles.page}>
         <View style={styles.header}>
           <Pressable accessibilityLabel="Trinity Health Solution home" onPress={() => router.replace("/public/home" as Href)} style={styles.brand}><View style={styles.logo}><Ionicons name="leaf-outline" size={19} color="#16803F" /></View><View><Text style={styles.brandName}>Trinity Health Solution</Text><Text style={styles.brandTag}>GROWING GOOD, TOGETHER</Text></View></Pressable>
-          <View style={styles.headerActions}><Pressable accessibilityLabel="Saved lessons" onPress={() => router.push("/public/saved" as Href)} style={styles.headerIcon}><Ionicons name="bookmark-outline" size={18} color="#365B41" /></Pressable><Pressable accessibilityLabel="Settings" onPress={() => setSettingsVisible(true)} style={styles.headerIcon}><Ionicons name="settings-outline" size={18} color="#365B41" /></Pressable></View>
+          <View style={styles.headerActions}><Pressable accessibilityLabel={am ? "የተቀመጡ ትምህርቶች" : "Saved lessons"} onPress={() => router.push("/public/saved" as Href)} style={styles.headerIcon}><Ionicons name="bookmark-outline" size={18} color="#365B41" /></Pressable><Pressable accessibilityLabel={am ? "ቅንብሮች" : "Settings"} onPress={() => router.push("/public/settings" as Href)} style={styles.headerIcon}><Ionicons name="settings-outline" size={18} color="#365B41" /></Pressable></View>
         </View>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.eyebrow}>{am ? "በኩሽና ውስጥ እንጀምር" : "LET’S START IN THE KITCHEN"}</Text>
@@ -61,7 +58,6 @@ export default function FoodIdeasScreen() {
         </ScrollView>
         <Pressable accessibilityLabel="Ask Opal" onPress={() => router.push("/public/opal" as Href)} style={styles.opal}><Ionicons name="sparkles-outline" size={17} color="#FFFFFF" /><Text style={styles.opalText}>Ask Opal</Text></Pressable>
       </View>
-      <Modal transparent visible={settingsVisible} animationType="fade" onRequestClose={() => setSettingsVisible(false)}><Pressable style={[styles.modalBackdrop, { paddingBottom: 14 + insets.bottom }]} onPress={() => setSettingsVisible(false)}><Pressable style={styles.modal} onPress={() => undefined}><Text style={styles.modalTitle}>{am ? "ቋንቋ" : "Choose a language"}</Text><Pressable onPress={() => { setLanguage("en"); setSettingsVisible(false); }} style={styles.modalOption}><Text style={styles.modalText}>English</Text></Pressable><Pressable onPress={() => { setLanguage("am"); setSettingsVisible(false); }} style={styles.modalOption}><Text style={styles.modalText}>አማርኛ</Text></Pressable></Pressable></Pressable></Modal>
     </SafeAreaView>
   );
 }
