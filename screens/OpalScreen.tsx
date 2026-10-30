@@ -155,7 +155,7 @@ export default function OpalScreen() {
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <View style={styles.pageHeader}>
@@ -177,6 +177,7 @@ export default function OpalScreen() {
           contentContainerStyle={styles.conversation}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          style={styles.conversationScroll}
         >
           <Text style={styles.eyebrow}>
             {am ? "ትንሽ መመሪያ" : "A LITTLE GUIDANCE"}
@@ -347,6 +348,7 @@ export default function OpalScreen() {
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F8FBF8", flex: 1 },
   keyboardView: { flex: 1 },
+  conversationScroll: { flex: 1 },
   pageHeader: {
     backgroundColor: "#FFFFFF",
     borderBottomColor: "#E2EAE3",
