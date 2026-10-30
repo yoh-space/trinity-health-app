@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { DailyLessonCard } from "../components/public/DailyLessonCard";
 import { GuestHomeHeader } from "../components/public/GuestHomeHeader";
 import { HomeLessonCard } from "../components/public/HomeLessonCard";
@@ -12,6 +12,7 @@ import { useTrinityStore } from "../store/useTrinityStore";
 
 export default function TrinityHomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { language, setLanguage, savedIds, toggleSaved } = useTrinityStore();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const copy = homeCopy[language];
@@ -50,7 +51,10 @@ export default function TrinityHomeScreen() {
         <View style={styles.footer}><Ionicons name="leaf-outline" size={15} color="#6B9272" /><Text style={styles.footerText}>{copy.footer}</Text></View>
       </ScrollView>
       <Modal animationType="fade" transparent visible={settingsVisible} onRequestClose={() => setSettingsVisible(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSettingsVisible(false)}>
+        <Pressable
+          style={[styles.modalBackdrop, { paddingBottom: 16 + insets.bottom }]}
+          onPress={() => setSettingsVisible(false)}
+        >
           <Pressable style={styles.languageModal} onPress={() => undefined}>
             <Text style={styles.modalTitle}>{copy.settingsTitle}</Text>
             <Pressable style={[styles.languageOption, language === "en" && styles.languageOptionActive]} onPress={() => { setLanguage("en"); setSettingsVisible(false); }}><Text style={styles.languageOptionText}>English</Text><Text style={styles.languageOptionSub}>A little learning. A lot of care.</Text></Pressable>

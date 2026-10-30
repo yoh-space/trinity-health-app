@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { GuestChoiceChip } from "../components/public/GuestChoiceChip";
 import { useTrinityStore } from "../store/useTrinityStore";
 
@@ -22,6 +22,7 @@ const recipes = [
 
 export default function FoodIdeasScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const language = useTrinityStore((state) => state.language);
   const setLanguage = useTrinityStore((state) => state.setLanguage);
   const am = language === "am";
@@ -60,7 +61,7 @@ export default function FoodIdeasScreen() {
         </ScrollView>
         <Pressable accessibilityLabel="Ask Opal" onPress={() => router.push("/public/opal" as Href)} style={styles.opal}><Ionicons name="sparkles-outline" size={14} color="#FFFFFF" /><Text style={styles.opalText}>Ask Opal</Text></Pressable>
       </View>
-      <Modal transparent visible={settingsVisible} animationType="fade" onRequestClose={() => setSettingsVisible(false)}><Pressable style={styles.modalBackdrop} onPress={() => setSettingsVisible(false)}><Pressable style={styles.modal} onPress={() => undefined}><Text style={styles.modalTitle}>{am ? "ቋንቋ" : "Choose a language"}</Text><Pressable onPress={() => { setLanguage("en"); setSettingsVisible(false); }} style={styles.modalOption}><Text style={styles.modalText}>English</Text></Pressable><Pressable onPress={() => { setLanguage("am"); setSettingsVisible(false); }} style={styles.modalOption}><Text style={styles.modalText}>አማርኛ</Text></Pressable></Pressable></Pressable></Modal>
+      <Modal transparent visible={settingsVisible} animationType="fade" onRequestClose={() => setSettingsVisible(false)}><Pressable style={[styles.modalBackdrop, { paddingBottom: 14 + insets.bottom }]} onPress={() => setSettingsVisible(false)}><Pressable style={styles.modal} onPress={() => undefined}><Text style={styles.modalTitle}>{am ? "ቋንቋ" : "Choose a language"}</Text><Pressable onPress={() => { setLanguage("en"); setSettingsVisible(false); }} style={styles.modalOption}><Text style={styles.modalText}>English</Text></Pressable><Pressable onPress={() => { setLanguage("am"); setSettingsVisible(false); }} style={styles.modalOption}><Text style={styles.modalText}>አማርኛ</Text></Pressable></Pressable></Pressable></Modal>
     </SafeAreaView>
   );
 }
