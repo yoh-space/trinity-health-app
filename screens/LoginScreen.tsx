@@ -4,6 +4,7 @@ import { useSSO } from "@clerk/expo";
 import { RFValue } from "react-native-responsive-fontsize";
 import { AntDesign } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import GoogleIcon from "../components/icons/GoogleIcon";
 
 type OAuthStrategy = "oauth_google" | "oauth_apple";
 
@@ -43,10 +44,7 @@ const LoginScreen = () => {
             onPress({ strategy: "oauth_google" });
           }}
         >
-          <Image
-            style={styles.googleIcon}
-            source={require("../assets/icons/google.png")}
-          />
+          <GoogleIcon size={20} />
           <Text style={{ ...styles.buttonText, color: "#344054" }}>
             Continue with Google
           </Text>
@@ -177,11 +175,6 @@ const styles = StyleSheet.create({
   signupText: {
     color: "#4D9DE0",
     fontFamily: "Righteous_400Regular",
-  },
-  googleIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 12,
   },
   errorText: {
     fontSize: RFValue(14),
