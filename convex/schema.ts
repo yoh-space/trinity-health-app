@@ -85,7 +85,11 @@ export default defineSchema({
   careRequestEvents: defineTable({
     requestId: v.id("careRequests"),
     actorUserId: v.string(),
-    actorRole: v.union(v.literal("user"), v.literal("clinical")),
+    actorRole: v.union(
+      v.literal("user"),
+      v.literal("clinical"),
+      v.literal("counselor"),
+    ),
     action: v.union(
       v.literal("submitted"),
       v.literal("statusChanged"),

@@ -305,11 +305,6 @@ export default function StaffPortalScreen() {
     }
   };
 
-  const openDemo = () => {
-    setMessage("");
-    router.push(staffDashboardPath(roleId));
-  };
-
   return (
     <SafeAreaView edges={["top", "left", "right", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -490,19 +485,6 @@ export default function StaffPortalScreen() {
             ) : null}
           </View>
 
-          {roleId !== "clinician" ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={openDemo}
-              style={({ pressed }) => [
-                styles.demoButton,
-                pressed && styles.secondaryPressed,
-              ]}
-            >
-              <Text style={styles.demoText}>Continue with demo access</Text>
-            </Pressable>
-          ) : null}
-
           <View style={styles.privacyRow}>
             <Ionicons
               name="shield-checkmark-outline"
@@ -510,8 +492,8 @@ export default function StaffPortalScreen() {
               color="#16803F"
             />
             <Text style={styles.privacyText}>
-              Staff sign-in is handled securely by Clerk. Demo requests are
-              fictional and contain no personal details.
+              Staff sign-in is handled by Clerk. Request queues are available
+              only to accounts authorized for the selected staff role.
             </Text>
           </View>
 
@@ -639,17 +621,6 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   linkText: { color: "#176C36", fontSize: 13, fontWeight: "600" },
-  demoButton: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#D8E5D9",
-    borderRadius: 12,
-    borderWidth: 1,
-    justifyContent: "center",
-    marginTop: 10,
-    minHeight: 48,
-  },
-  demoText: { color: "#17241B", fontSize: 14, fontWeight: "600" },
   message: {
     color: "#9A4C24",
     fontSize: 12,

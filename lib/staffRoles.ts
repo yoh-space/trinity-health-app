@@ -32,7 +32,7 @@ export const staffRoles: StaffRole[] = [
     id: "admin",
     label: "Admin",
     shortLabel: "Admin",
-    description: "Queue & team",
+    description: "Service overview",
     deskLabel: "ADMIN DESK",
     icon: "people-outline",
   },
@@ -46,4 +46,6 @@ export function getStaffRole(value: string | string[] | undefined): StaffRole {
 export const staffDashboardPath = (role: StaffRoleId): Href =>
   role === "clinician"
     ? "/staff/clinical"
-    : (`/staff-dashboard?role=${role}` as Href);
+    : role === "counselor"
+      ? ("/staff/counselor" as Href)
+      : ("/staff/admin" as Href);

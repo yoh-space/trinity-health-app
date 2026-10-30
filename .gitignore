@@ -42,3 +42,7 @@ app-example
 /ios
 /android/.kotlin
 /android/.gradle
+/agent
+/.agents
+skills-lock.json
+/.claude

@@ -59,7 +59,7 @@ export const storyCopy = {
     "Open to everyone. No account needed.",
     "Advancing SDG 3: Good Health and Well-Being",
   ],
-  portal: "Open the staff portal (demo)",
+  portal: "Open the staff portal",
   amharicNote: "እንክብካቤ ከቤት ይጀምራል።",
   englishNote: "Care begins at home.",
 };
