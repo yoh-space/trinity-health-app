@@ -1,37 +1,39 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import * as SecureStore from "expo-secure-store";
-import { useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { api } from "../convex/_generated/api";
 import { OnboardingChoiceGrid } from "../components/onboarding/OnboardingChoiceGrid";
 import { OnboardingTextField } from "../components/onboarding/OnboardingTextField";
 import {
-  activityOptions,
-  ageOptions,
-  consultationOptions,
-  eatingOptions,
-  goalOptions,
-  mealOptions,
-  onboardingCopy,
-  profileOptions,
-  supportOptions,
-  type OnboardingStep,
+    activityOptions,
+    ageOptions,
+    consultationOptions,
+    eatingOptions,
+    goalOptions,
+    mealOptions,
+    onboardingCopy,
+    profileOptions,
+    supportOptions,
+    type OnboardingStep,
 } from "../components/onboarding/onboardingContent";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
+import { api } from "../convex/_generated/api";
 import { calculateBmi } from "../lib/onboarding/bmi";
+import { ONBOARDING_PROFILE_KEY } from "../lib/onboarding/secureProfile";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 type OnboardingAnswers = {
@@ -72,8 +74,6 @@ const initialAnswers: OnboardingAnswers = {
   weightUnit: "kg",
 };
 
-const secureProfileKey = "trinity-onboarding-profile";
-
 function toggleValue(values: string[], value: string, limit?: number) {
   if (values.includes(value)) return values.filter((item) => item !== value);
   if (limit && values.length >= limit) return values;
@@ -82,6 +82,7 @@ function toggleValue(values: string[], value: string, limit?: number) {
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { source } = useLocalSearchParams<{ source?: string }>();
   const { isSignedIn } = useAuth();
   const savedProfile = useQuery(api.onboarding.getProfile);
   const saveProfile = useMutation(api.onboarding.saveProfile);
@@ -115,28 +116,68 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     if (savedProfile === undefined || profileLoaded) return;
-    setProfileLoaded(true);
-    if (profileEditStarted.current || step > 1) return;
-    if (!savedProfile) return;
+    if (profileEditStarted.current || step > 1) {
+      setProfileLoaded(true);
+      return;
+    }
 
-    setAnswers({
-      audience: savedProfile.audience ?? "",
-      age: savedProfile.age ?? "",
-      support: savedProfile.support ?? [],
-      generalSupport: savedProfile.generalSupport ?? false,
-      otherSupport: savedProfile.otherSupport ?? "",
-      meals: savedProfile.meals ?? "",
-      activity: savedProfile.activity ?? "",
-      eatingPatterns: savedProfile.eatingPatterns ?? [],
-      goals: savedProfile.goals ?? [],
-      otherGoal: savedProfile.otherGoal ?? "",
-      consultation: savedProfile.consultation ?? "",
-      otherConsultation: savedProfile.otherConsultation ?? "",
-      heightCm: savedProfile.heightCm?.toString() ?? "",
-      weightKg: savedProfile.weightKg?.toString() ?? "",
-      heightUnit: "cm",
-      weightUnit: "kg",
-    });
+    let isCurrent = true;
+    const loadProfile = async () => {
+      if (savedProfile) {
+        setAnswers({
+          audience: savedProfile.audience ?? "",
+          age: savedProfile.age ?? "",
+          support: savedProfile.support ?? [],
+          generalSupport: savedProfile.generalSupport ?? false,
+          otherSupport: savedProfile.otherSupport ?? "",
+          meals: savedProfile.meals ?? "",
+          activity: savedProfile.activity ?? "",
+          eatingPatterns: savedProfile.eatingPatterns ?? [],
+          goals: savedProfile.goals ?? [],
+          otherGoal: savedProfile.otherGoal ?? "",
+          consultation: savedProfile.consultation ?? "",
+          otherConsultation: savedProfile.otherConsultation ?? "",
+          heightCm: savedProfile.heightCm?.toString() ?? "",
+          weightKg: savedProfile.weightKg?.toString() ?? "",
+        });
+        setProfileLoaded(true);
+        return;
+      }
+
+      try {
+        const localValue = await SecureStore.getItemAsync(
+          ONBOARDING_PROFILE_KEY,
+        );
+        if (!isCurrent || !localValue) return;
+        const localProfile = JSON.parse(
+          localValue,
+        ) as Partial<OnboardingAnswers>;
+        setAnswers({
+          ...initialAnswers,
+          ...localProfile,
+          support: Array.isArray(localProfile.support)
+            ? localProfile.support
+            : [],
+          eatingPatterns: Array.isArray(localProfile.eatingPatterns)
+            ? localProfile.eatingPatterns
+            : [],
+          goals: Array.isArray(localProfile.goals) ? localProfile.goals : [],
+        });
+        setRememberOnDevice(true);
+      } catch (error) {
+        console.error(
+          "Unable to load onboarding answers from this device.",
+          error,
+        );
+      } finally {
+        if (isCurrent) setProfileLoaded(true);
+      }
+    };
+
+    void loadProfile();
+    return () => {
+      isCurrent = false;
+    };
   }, [savedProfile, profileLoaded, step]);
 
   const update = <K extends keyof OnboardingAnswers>(
@@ -147,16 +188,26 @@ export default function OnboardingScreen() {
     setAnswers((current) => ({ ...current, [key]: value }));
   };
 
-  const openLearning = () => {
-    router.replace("/public/home" as Href);
+  const exitOnboarding = () => {
+    const destination =
+      source === "profile"
+        ? isSignedIn
+          ? "/(app)/(tabs)/profile"
+          : "/public/profile"
+        : isSignedIn
+          ? AUTHENTICATED_HOME_TABS
+          : "/public/home";
+    router.replace(destination as Href);
   };
+
+  const openLearning = exitOnboarding;
 
   const goBack = () => {
     if (step > 1) {
       setStep((current) => (current - 1) as OnboardingStep);
       return;
     }
-    router.replace("/" as Href);
+    exitOnboarding();
   };
 
   const finish = async (continueWithoutCloud = false) => {
@@ -202,7 +253,9 @@ export default function OnboardingScreen() {
         } catch (error) {
           console.error("Unable to save onboarding profile to Convex.", error);
           Alert.alert(
-            language === "am" ? "መልሶችን ማስቀመጥ አልተቻለም" : "Could not save to your account",
+            language === "am"
+              ? "መልሶችን ማስቀመጥ አልተቻለም"
+              : "Could not save to your account",
             language === "am"
               ? "እንደገና ይሞክሩ ወይም ወደ መለያ ሳያስቀምጡ ይቀጥሉ።"
               : "Try again, or continue without saving to your account.",
@@ -223,16 +276,21 @@ export default function OnboardingScreen() {
       try {
         if (rememberOnDevice) {
           await SecureStore.setItemAsync(
-            secureProfileKey,
+            ONBOARDING_PROFILE_KEY,
             JSON.stringify({ ...answers, language, updatedAt: Date.now() }),
           );
         } else {
-          await SecureStore.deleteItemAsync(secureProfileKey);
+          await SecureStore.deleteItemAsync(ONBOARDING_PROFILE_KEY);
         }
       } catch (error) {
-        console.error("Unable to save onboarding answers on this device.", error);
+        console.error(
+          "Unable to save onboarding answers on this device.",
+          error,
+        );
         Alert.alert(
-          language === "am" ? "መልሶችን ማስቀመጥ አልተቻለም" : "Could not save on this device",
+          language === "am"
+            ? "መልሶችን ማስቀመጥ አልተቻለም"
+            : "Could not save on this device",
           language === "am"
             ? "ሳያስቀምጡ መቀጠል ወይም እንደገና መሞከር ይችላሉ።"
             : "You can continue without a device copy or try again.",
@@ -465,18 +523,25 @@ export default function OnboardingScreen() {
                                   : unit === "m"
                                     ? currentCm / 100
                                     : currentCm / 30.48;
-                              update("heightCm", sanitizeMeasurement(converted.toFixed(2).replace(/\.?0+$/, "")));
+                              update(
+                                "heightCm",
+                                sanitizeMeasurement(
+                                  converted.toFixed(2).replace(/\.?0+$/, ""),
+                                ),
+                              );
                               update("heightUnit", unit);
                             }}
                             style={[
                               styles.unitToggle,
-                              answers.heightUnit === unit && styles.unitToggleActive,
+                              answers.heightUnit === unit &&
+                                styles.unitToggleActive,
                             ]}
                           >
                             <Text
                               style={[
                                 styles.unitToggleText,
-                                answers.heightUnit === unit && styles.unitToggleTextActive,
+                                answers.heightUnit === unit &&
+                                  styles.unitToggleTextActive,
                               ]}
                             >
                               {unit}
@@ -516,18 +581,25 @@ export default function OnboardingScreen() {
                                 unit === "kg"
                                   ? currentKg
                                   : currentKg / 0.45359237;
-                              update("weightKg", sanitizeMeasurement(converted.toFixed(2).replace(/\.?0+$/, "")));
+                              update(
+                                "weightKg",
+                                sanitizeMeasurement(
+                                  converted.toFixed(2).replace(/\.?0+$/, ""),
+                                ),
+                              );
                               update("weightUnit", unit);
                             }}
                             style={[
                               styles.unitToggle,
-                              answers.weightUnit === unit && styles.unitToggleActive,
+                              answers.weightUnit === unit &&
+                                styles.unitToggleActive,
                             ]}
                           >
                             <Text
                               style={[
                                 styles.unitToggleText,
-                                answers.weightUnit === unit && styles.unitToggleTextActive,
+                                answers.weightUnit === unit &&
+                                  styles.unitToggleTextActive,
                               ]}
                             >
                               {unit}
@@ -547,7 +619,9 @@ export default function OnboardingScreen() {
               </>
             ) : (
               <View style={styles.bmiCard}>
-                <Text style={styles.measurementNotice}>{copy.measurementHint}</Text>
+                <Text style={styles.measurementNotice}>
+                  {copy.measurementHint}
+                </Text>
               </View>
             )}
           </>
@@ -837,7 +911,11 @@ const styles = StyleSheet.create({
     width: 32,
   },
   brand: { alignItems: "center", flex: 1 },
-  brandName: { color: "#1C5132", fontFamily: "Righteous_400Regular", fontSize: 11 },
+  brandName: {
+    color: "#1C5132",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 11,
+  },
   brandTagline: {
     color: "#788A7B",
     fontFamily: "Righteous_400Regular",
@@ -859,7 +937,11 @@ const styles = StyleSheet.create({
     height: 4,
   },
   progressComplete: { backgroundColor: "#178243" },
-  progressText: { color: "#617266", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  progressText: {
+    color: "#617266",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+  },
   scrollContent: { paddingBottom: 14 },
   headingBlock: { marginBottom: 16, marginTop: 7 },
   eyebrow: {
@@ -1011,7 +1093,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 14,
   },
-  skipText: { color: "#55705D", fontFamily: "Righteous_400Regular", fontSize: 10 },
+  skipText: {
+    color: "#55705D",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 10,
+  },
   primaryButton: {
     alignItems: "center",
     backgroundColor: "#08783D",
@@ -1025,7 +1111,11 @@ const styles = StyleSheet.create({
   continueButton: { flex: 1 },
   pressedButton: { backgroundColor: "#066333", opacity: 0.88 },
   disabledButton: { opacity: 0.6 },
-  primaryButtonText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 12 },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 12,
+  },
   showAllButton: {
     alignItems: "center",
     justifyContent: "center",
@@ -1061,8 +1151,16 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   lastSummaryRow: { borderBottomWidth: 0 },
-  summaryLabel: { color: "#738176", fontFamily: "Righteous_400Regular", fontSize: 9 },
-  summaryValue: { color: "#2A4131", fontFamily: "Righteous_400Regular", fontSize: 11 },
+  summaryLabel: {
+    color: "#738176",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+  },
+  summaryValue: {
+    color: "#2A4131",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 11,
+  },
   rememberRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -1070,7 +1168,11 @@ const styles = StyleSheet.create({
     marginTop: 13,
   },
   rememberCopy: { flex: 1 },
-  rememberTitle: { color: "#324838", fontFamily: "Righteous_400Regular", fontSize: 10 },
+  rememberTitle: {
+    color: "#324838",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 10,
+  },
   rememberHint: {
     color: "#78877C",
     fontFamily: "Righteous_400Regular",

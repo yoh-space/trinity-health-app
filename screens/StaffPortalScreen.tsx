@@ -1,7 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useSignIn, useSignUp, useSSO } from "@clerk/expo";
 import { useRouter, type Href } from "expo-router";
-import { useState } from "react";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,44 +17,327 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import GoogleIcon from "../components/icons/GoogleIcon";
+import { useStaffPortalVisibility } from "../hooks/useStaffPortalVisibility";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
 import {
-  getStaffRole,
   staffDashboardPath,
   staffRoles,
   type StaffRoleId,
 } from "../lib/staffRoles";
 
+WebBrowser.maybeCompleteAuthSession();
+
+type AuthFlow = "signIn" | "signUp" | null;
+type AuthStep = "email" | "code";
+
+type ClerkErrorShape = {
+  code?: string;
+  message?: string;
+  longMessage?: string;
+  errors?: {
+    code?: string;
+    message?: string;
+    longMessage?: string;
+  }[];
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  const clerkError = error as ClerkErrorShape | null;
+  const firstError = clerkError?.errors?.[0];
+  return (
+    firstError?.longMessage ??
+    firstError?.message ??
+    clerkError?.longMessage ??
+    clerkError?.message ??
+    fallback
+  );
+}
+
+function isMissingIdentifierError(error: unknown) {
+  const clerkError = error as ClerkErrorShape | null;
+  const code = clerkError?.errors?.[0]?.code ?? clerkError?.code;
+  return [
+    "form_identifier_not_found",
+    "identifier_not_found",
+    "resource_not_found",
+  ].includes(code ?? "");
+}
+
+function isCancelError(error: unknown) {
+  const clerkError = error as ClerkErrorShape | null;
+  const code = String(clerkError?.code ?? clerkError?.errors?.[0]?.code ?? "").toLowerCase();
+  const message = String(
+    clerkError?.message ?? clerkError?.errors?.[0]?.message ?? "",
+  ).toLowerCase();
+  return code.includes("cancel") || code === "-5" || message.includes("cancel") || message.includes("dismiss");
+}
+
 export default function StaffPortalScreen() {
   const router = useRouter();
+  const {
+    isReady: authReady,
+    isSignedIn,
+    staffRole,
+  } = useStaffPortalVisibility();
+  const { signIn, fetchStatus: signInFetchStatus } = useSignIn();
+  const { signUp, fetchStatus: signUpFetchStatus } = useSignUp();
+  const { startSSOFlow } = useSSO();
   const [roleId, setRoleId] = useState<StaffRoleId>("counselor");
-  const [staffId, setStaffId] = useState("");
-  const [password, setPassword] = useState("");
+  const [step, setStep] = useState<AuthStep>("email");
+  const [flow, setFlow] = useState<AuthFlow>(null);
+  const [email, setEmail] = useState("");
+  const [verifiedEmail, setVerifiedEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [localLoading, setLocalLoading] = useState(false);
   const [message, setMessage] = useState("");
-  const role = getStaffRole(roleId);
+  const isBusy =
+    localLoading ||
+    signInFetchStatus === "fetching" ||
+    signUpFetchStatus === "fetching";
 
-  const openDesk = () => {
-    if (roleId === "clinician") {
-      router.push("/staff/clinical" as Href);
+  useEffect(() => {
+    if (!authReady || !isSignedIn) return;
+
+    const destination = staffRole
+      ? staffDashboardPath(staffRole)
+      : AUTHENTICATED_HOME_TABS;
+    router.replace(destination as Href);
+  }, [authReady, isSignedIn, router, staffRole]);
+
+  const startSignUp = async (emailAddress: string) => {
+    if (!signUp) {
+      setMessage("Authentication is still loading. Please try again.");
       return;
     }
-    if (!staffId.trim() || !password.trim()) {
+
+    const createResult = await signUp.create({ emailAddress });
+    if (createResult.error) {
       setMessage(
-        "Enter your Staff ID and password, or continue with demo access.",
+        getErrorMessage(createResult.error, "Could not start email verification."),
       );
       return;
     }
-    router.push(staffDashboardPath(roleId));
+
+    const sendResult = await signUp.verifications.sendEmailCode();
+    if (sendResult.error) {
+      setMessage(
+        getErrorMessage(sendResult.error, "Could not send the verification code."),
+      );
+      return;
+    }
+
+    setFlow("signUp");
+    setVerifiedEmail(emailAddress);
+    setCode("");
+    setStep("code");
   };
 
-  const openDemo = () => {
+  const handleContinueWithEmail = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setMessage("Enter your email address.");
+      return;
+    }
+    if (!signIn || !signUp) {
+      setMessage("Authentication is still loading. Please try again.");
+      return;
+    }
+
+    setLocalLoading(true);
     setMessage("");
-    router.push(staffDashboardPath(roleId));
+    try {
+      await signIn.reset();
+      await signUp.reset();
+
+      const result = await signIn.emailCode.sendCode({
+        emailAddress: normalizedEmail,
+      });
+      if (result.error) {
+        if (isMissingIdentifierError(result.error)) {
+          await startSignUp(normalizedEmail);
+          return;
+        }
+        setMessage(
+          getErrorMessage(result.error, "Could not send the verification code."),
+        );
+        return;
+      }
+
+      setFlow("signIn");
+      setVerifiedEmail(normalizedEmail);
+      setCode("");
+      setStep("code");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Connection problem. Please try again."));
+    } finally {
+      setLocalLoading(false);
+    }
   };
+
+  const finalizeIfComplete = async (resource: {
+    status: string;
+    finalize: () => Promise<{ error?: unknown }>;
+  }) => {
+    if (resource.status !== "complete") {
+      setMessage(
+        "This account needs more information before sign-in can finish. Contact your staff administrator.",
+      );
+      return;
+    }
+
+    const { error } = await resource.finalize();
+    if (error) {
+      setMessage(getErrorMessage(error, "Could not activate your session."));
+      return;
+    }
+
+    router.replace(staffDashboardPath(roleId));
+  };
+
+  const handleVerifyCode = async () => {
+    const trimmedCode = code.trim();
+    if (!trimmedCode) {
+      setMessage("Enter the verification code from your email.");
+      return;
+    }
+    if (!flow || !signIn || !signUp) {
+      setMessage("Start again by entering your email address.");
+      return;
+    }
+
+    setLocalLoading(true);
+    setMessage("");
+    try {
+      if (flow === "signUp") {
+        const result = await signUp.verifications.verifyEmailCode({
+          code: trimmedCode,
+        });
+        if (result.error) {
+          setMessage(
+            getErrorMessage(result.error, "That code is invalid or expired."),
+          );
+          return;
+        }
+        await finalizeIfComplete(signUp);
+        return;
+      }
+
+      const result = await signIn.emailCode.verifyCode({ code: trimmedCode });
+      if (result.error) {
+        setMessage(
+          getErrorMessage(result.error, "That code is invalid or expired."),
+        );
+        return;
+      }
+      await finalizeIfComplete(signIn);
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Connection problem. Please try again."));
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!flow || !signIn || !signUp) {
+      setMessage("Start again by entering your email address.");
+      return;
+    }
+
+    setLocalLoading(true);
+    setMessage("");
+    try {
+      const result =
+        flow === "signUp"
+          ? await signUp.verifications.sendEmailCode()
+          : await signIn.emailCode.sendCode();
+      if (result.error) {
+        setMessage(
+          getErrorMessage(result.error, "Could not resend the verification code."),
+        );
+        return;
+      }
+      setMessage("A new verification code has been sent.");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Connection problem. Please try again."));
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  const handleChangeEmail = async () => {
+    setLocalLoading(true);
+    setMessage("");
+    try {
+      await signIn?.reset();
+      await signUp?.reset();
+      setCode("");
+      setVerifiedEmail("");
+      setFlow(null);
+      setStep("email");
+    } catch (error) {
+      setMessage(getErrorMessage(error, "Could not restart sign-in."));
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLocalLoading(true);
+    setMessage("");
+    try {
+      const result = await startSSOFlow({
+        strategy: "oauth_google",
+        redirectUrl: AuthSession.makeRedirectUri({ path: "sso-callback" }),
+      });
+
+      if (result.createdSessionId && result.setActive) {
+        const destination = staffDashboardPath(roleId);
+        await result.setActive({
+          session: result.createdSessionId,
+          navigate: async ({ decorateUrl }) => {
+            const url = decorateUrl(String(destination));
+            if (url.startsWith("http") && typeof window !== "undefined") {
+              window.location.href = url;
+            } else {
+              router.replace(url as Href);
+            }
+          },
+        });
+        return;
+      }
+
+      if (result.signUp?.status === "missing_requirements") {
+        setMessage(
+          "This Google account needs more information before it can sign in.",
+        );
+      }
+    } catch (error) {
+      if (!isCancelError(error)) {
+        setMessage(getErrorMessage(error, "Could not sign in with Google."));
+      }
+    } finally {
+      setLocalLoading(false);
+    }
+  };
+
+  if (!authReady || isSignedIn) {
+    return (
+      <SafeAreaView edges={["top", "left", "right", "bottom"]} style={styles.safeArea}>
+        <View style={styles.redirectState}>
+          <ActivityIndicator color="#16803F" />
+          <Text style={styles.redirectText}>
+            {isSignedIn ? "Restoring your staff session…" : "Checking your session…"}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
+    <SafeAreaView edges={["top", "left", "right", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -57,29 +345,19 @@ export default function StaffPortalScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brandRow}>
-            <View style={styles.logoMark}>
-              <Ionicons name="leaf-outline" size={25} color="#218243" />
-              <View style={styles.logoHeart} />
-            </View>
-            <View>
-              <Text style={styles.brandTitle}>Staff Portal</Text>
-              <Text style={styles.brandCaption}>TRINITY HEALTH SOLUTION</Text>
-            </View>
+          <View style={styles.brand}>
+            <Image
+              source={require("../assets/images/trinity-symbol.png")}
+              resizeMode="contain"
+              style={styles.brandMark}
+            />
+            <Text style={styles.brandCaption}>STAFF PORTAL</Text>
           </View>
 
-          <View style={styles.eyebrowRow}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={12}
-              color="#4B8A5A"
-            />
-            <Text style={styles.eyebrow}>TEAM ACCESS</Text>
-          </View>
           <Text style={styles.title}>Welcome back to care.</Text>
           <Text style={styles.subtitle}>
-            Review consultations, assign the right colleague, and keep families
-            informed.
+            Review consultation requests, assign the right colleague, and keep
+            families informed.
           </Text>
 
           <View accessibilityRole="radiogroup" style={styles.roleGrid}>
@@ -97,95 +375,154 @@ export default function StaffPortalScreen() {
                   style={[styles.roleCard, selected && styles.roleCardSelected]}
                 >
                   <Text
-                    style={[
-                      styles.roleName,
-                      selected && styles.roleNameSelected,
-                    ]}
+                    style={[styles.roleName, selected && styles.roleNameSelected]}
                   >
                     {item.shortLabel}
                   </Text>
-                  <Text
-                    style={[
-                      styles.roleDescription,
-                      selected && styles.roleDescriptionSelected,
-                    ]}
-                  >
-                    {item.description}
-                  </Text>
+                  <Text style={styles.roleDescription}>{item.description}</Text>
                 </Pressable>
               );
             })}
           </View>
 
           <View style={styles.form}>
-            {roleId === "clinician" ? (
-              <Text style={styles.secureInfoText}>
-                Use your Trinity-approved account. Clinical access is checked by
-                the server; demo credentials are disabled.
-              </Text>
+            {step === "email" ? (
+              <>
+                <Text style={styles.fieldLabel}>Email address</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isBusy}
+                  keyboardType="email-address"
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    setMessage("");
+                  }}
+                  placeholder="name@example.com"
+                  placeholderTextColor="#929D95"
+                  returnKeyType="go"
+                  style={styles.input}
+                  textContentType="emailAddress"
+                  value={email}
+                  onSubmitEditing={() => void handleContinueWithEmail()}
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isBusy}
+                  onPress={() => void handleContinueWithEmail()}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    isBusy && styles.disabledButton,
+                    pressed && !isBusy && styles.pressed,
+                  ]}
+                >
+                  {isBusy ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>Continue</Text>
+                      <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+                    </>
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isBusy}
+                  onPress={() => void handleGoogleSignIn()}
+                  style={({ pressed }) => [
+                    styles.googleButton,
+                    pressed && !isBusy && styles.secondaryPressed,
+                  ]}
+                >
+                  {isBusy ? (
+                    <ActivityIndicator color="#1C3524" />
+                  ) : (
+                    <>
+                      <GoogleIcon size={18} />
+                      <Text style={styles.googleButtonText}>
+                        Continue with Google
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
             ) : (
               <>
-                <Text style={styles.fieldLabel}>Staff ID</Text>
+                <Text style={styles.fieldLabel}>Verification code</Text>
                 <TextInput
-                  autoCapitalize="characters"
+                  autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!isBusy}
+                  keyboardType="number-pad"
                   onChangeText={(value) => {
-                    setStaffId(value);
+                    setCode(value);
                     setMessage("");
                   }}
-                  placeholder="e.g. THS-0000"
-                  placeholderTextColor="#9AA89E"
-                  style={styles.input}
-                  value={staffId}
+                  placeholder="Enter the code"
+                  placeholderTextColor="#929D95"
+                  returnKeyType="done"
+                  style={[styles.input, styles.codeInput]}
+                  textContentType="oneTimeCode"
+                  value={code}
+                  onSubmitEditing={() => void handleVerifyCode()}
                 />
-                <Text style={styles.fieldLabel}>Password</Text>
-                <TextInput
-                  onChangeText={(value) => {
-                    setPassword(value);
-                    setMessage("");
-                  }}
-                  placeholder="••••••••"
-                  placeholderTextColor="#9AA89E"
-                  secureTextEntry
-                  style={styles.input}
-                  value={password}
-                />
+                <Text style={styles.codeHelp}>Sent to {verifiedEmail}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isBusy}
+                  onPress={() => void handleVerifyCode()}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    isBusy && styles.disabledButton,
+                    pressed && !isBusy && styles.pressed,
+                  ]}
+                >
+                  {isBusy ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>Verify code</Text>
+                      <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+                    </>
+                  )}
+                </Pressable>
+                <View style={styles.codeActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isBusy}
+                    onPress={() => void handleResendCode()}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.linkText}>Resend code</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isBusy}
+                    onPress={() => void handleChangeEmail()}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.linkText}>Change email</Text>
+                  </Pressable>
+                </View>
               </>
             )}
-            <Pressable
-              accessibilityRole="button"
-              onPress={openDesk}
-              style={({ pressed }) => [
-                styles.signInButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.signInText}>
-                {roleId === "clinician" ? "Open clinical dashboard" : "Sign in"}
+
+            {message ? (
+              <Text accessibilityLiveRegion="polite" style={styles.message}>
+                {message}
               </Text>
-              <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-            </Pressable>
-            {roleId !== "clinician" && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={openDemo}
-                style={({ pressed }) => [
-                  styles.demoButton,
-                  pressed && styles.demoPressed,
-                ]}
-              >
-                <Text style={styles.demoText}>Continue with demo access</Text>
-              </Pressable>
-            )}
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+            ) : null}
           </View>
 
           <View style={styles.privacyRow}>
-            <Ionicons name="lock-closed-outline" size={11} color="#66806D" />
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={15}
+              color="#16803F"
+            />
             <Text style={styles.privacyText}>
-              {roleId === "clinician"
-                ? "Clinical request access is verified server-side against the approved staff allowlist."
-                : "Prototype sign-in; nothing is checked, stored, or sent. Sample requests are fictional and hold no personal details."}
+              Staff sign-in is handled by Clerk. Request queues are available
+              only to accounts authorized for the selected staff role.
             </Text>
           </View>
 
@@ -194,12 +531,8 @@ export default function StaffPortalScreen() {
             onPress={() => router.replace("/" as Href)}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={13} color="#386248" />
             <Text style={styles.backText}>Back to the family app</Text>
           </Pressable>
-          <Text style={styles.selectedDesk}>
-            Opening {role.label.toLowerCase()} desk
-          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -207,174 +540,142 @@ export default function StaffPortalScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: "#F0F9F1", flex: 1 },
+  safeArea: { backgroundColor: "#FFFFFF", flex: 1 },
+  redirectState: { alignItems: "center", flex: 1, gap: 10, justifyContent: "center" },
+  redirectText: { color: "#586B5F", fontSize: 13 },
   keyboardView: { flex: 1 },
   content: {
+    alignSelf: "center",
     flexGrow: 1,
-    paddingHorizontal: 13,
-    paddingTop: 10,
-    paddingBottom: 22,
+    maxWidth: 480,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 24,
+    width: "100%",
   },
-  brandRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 7,
-    marginBottom: 21,
-  },
-  logoMark: {
-    alignItems: "center",
-    height: 39,
-    justifyContent: "center",
-    width: 39,
-  },
-  logoHeart: {
-    borderColor: "#218243",
-    borderRadius: 8,
-    borderWidth: 1.5,
-    height: 13,
-    position: "absolute",
-    right: 1,
-    top: 14,
-    transform: [{ rotate: "-28deg" }],
-    width: 20,
-  },
-  brandTitle: { color: "#24733B", fontFamily: "Righteous_400Regular", fontSize: 11 },
+  brand: { alignItems: "flex-start", marginBottom: 17 },
+  brandMark: { height: 76, width: 82 },
   brandCaption: {
-    color: "#65906D",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 6,
-    letterSpacing: 1,
+    color: "#167839",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.3,
     marginTop: 2,
   },
-  eyebrowRow: { alignItems: "center", flexDirection: "row", gap: 4 },
-  eyebrow: {
-    color: "#4B8A5A",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 7,
-    letterSpacing: 1.1,
-  },
   title: {
-    color: "#1E4D2D",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 21,
-    lineHeight: 25,
-    marginTop: 5,
+    color: "#08662E",
+    fontSize: 26,
+    fontWeight: "700",
+    lineHeight: 33,
   },
   subtitle: {
-    color: "#6D7E72",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 8,
-    lineHeight: 12,
-    marginTop: 4,
-    maxWidth: 265,
+    color: "#586B5F",
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 6,
+    maxWidth: 360,
   },
-  roleGrid: { flexDirection: "row", gap: 5, marginTop: 14 },
+  roleGrid: { flexDirection: "row", gap: 8, marginTop: 20 },
   roleCard: {
-    backgroundColor: "#F8FCF8",
-    borderColor: "#D5E7D7",
-    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#D8E5D9",
+    borderRadius: 13,
     borderWidth: 1,
     flex: 1,
-    minHeight: 42,
-    paddingHorizontal: 6,
-    paddingVertical: 7,
+    justifyContent: "center",
+    minHeight: 72,
+    minWidth: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
   },
-  roleCardSelected: { backgroundColor: "#E0F1E3", borderColor: "#6FAA7A" },
-  roleName: { color: "#476151", fontFamily: "Righteous_400Regular", fontSize: 8 },
-  roleNameSelected: { color: "#276B3A" },
+  roleCardSelected: {
+    backgroundColor: "#E9F4EB",
+    borderColor: "#16803F",
+  },
+  roleName: { color: "#202B24", fontSize: 13, fontWeight: "700" },
+  roleNameSelected: { color: "#173D24" },
   roleDescription: {
-    color: "#7C8A81",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 6,
-    lineHeight: 8,
+    color: "#65766B",
+    fontSize: 10,
+    lineHeight: 14,
     marginTop: 3,
   },
-  roleDescriptionSelected: { color: "#587962" },
-  form: { marginTop: 13 },
-  secureInfoText: {
-    color: "#5B6F60",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 8,
-    lineHeight: 12,
-    marginBottom: 5,
-  },
+  form: { marginTop: 12 },
   fieldLabel: {
-    color: "#5B6F60",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 7,
-    marginBottom: 4,
-    marginTop: 7,
+    color: "#273C2E",
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 7,
   },
   input: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#D5E4D7",
-    borderRadius: 7,
+    borderColor: "#D8E5D9",
+    borderRadius: 12,
     borderWidth: 1,
-    color: "#284331",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 9,
-    height: 31,
-    paddingHorizontal: 9,
+    color: "#26392D",
+    fontSize: 15,
+    height: 48,
+    paddingHorizontal: 14,
   },
-  signInButton: {
+  codeInput: { letterSpacing: 3 },
+  codeHelp: { color: "#6A7B70", fontSize: 12, marginTop: 8 },
+  primaryButton: {
     alignItems: "center",
-    backgroundColor: "#93C9A4",
-    borderRadius: 7,
+    backgroundColor: "#16803F",
+    borderRadius: 12,
     flexDirection: "row",
-    gap: 5,
+    gap: 9,
     justifyContent: "center",
-    marginTop: 12,
-    minHeight: 31,
+    marginTop: 14,
+    minHeight: 50,
   },
-  pressed: { opacity: 0.78 },
-  signInText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 8 },
-  demoButton: {
+  primaryButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+  disabledButton: { opacity: 0.65 },
+  pressed: { opacity: 0.82 },
+  googleButton: {
     alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderColor: "#CFE1D2",
-    borderRadius: 7,
+    borderColor: "#D8E5D9",
+    borderRadius: 12,
     borderWidth: 1,
+    flexDirection: "row",
+    gap: 9,
     justifyContent: "center",
-    marginTop: 6,
-    minHeight: 31,
+    marginTop: 8,
+    minHeight: 46,
   },
-  demoPressed: { backgroundColor: "#F1F8F2" },
-  demoText: { color: "#315C3D", fontFamily: "Righteous_400Regular", fontSize: 8 },
+  googleButtonText: { color: "#24372B", fontSize: 14, fontWeight: "600" },
+  secondaryPressed: { backgroundColor: "#F3F8F4" },
+  codeActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 14,
+  },
+  linkText: { color: "#176C36", fontSize: 13, fontWeight: "600" },
   message: {
-    color: "#956636",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 7,
-    lineHeight: 10,
-    marginTop: 7,
+    color: "#9A4C24",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 10,
   },
   privacyRow: {
     alignItems: "flex-start",
     flexDirection: "row",
-    gap: 4,
-    marginTop: 10,
-    paddingHorizontal: 2,
+    gap: 9,
+    marginTop: 14,
   },
-  privacyText: {
-    color: "#78877C",
-    flex: 1,
-    fontFamily: "Righteous_400Regular",
-    fontSize: 6,
-    lineHeight: 8,
-  },
+  privacyText: { color: "#697A6F", flex: 1, fontSize: 12, lineHeight: 17 },
   backButton: {
     alignItems: "center",
     alignSelf: "center",
-    flexDirection: "row",
-    gap: 4,
-    marginTop: 14,
-    padding: 5,
+    justifyContent: "center",
+    marginTop: 13,
+    minHeight: 38,
+    paddingHorizontal: 8,
   },
-  backText: { color: "#386248", fontFamily: "Righteous_400Regular", fontSize: 7 },
-  selectedDesk: {
-    color: "#9AA99D",
-    fontFamily: "Righteous_400Regular",
-    fontSize: 6,
-    marginTop: 3,
-    textAlign: "center",
+  backText: {
+    color: "#385E44",
+    fontSize: 13,
+    textDecorationLine: "underline",
   },
 });

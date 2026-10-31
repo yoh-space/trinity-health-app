@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { type Auth } from "convex/server";
+import { internalQuery, mutation, query } from "./_generated/server";
+import { requireRole } from "./auth";
 
 const contentArgs = {
   title: v.string(),
@@ -12,28 +14,8 @@ const contentArgs = {
   readMinutes: v.number(),
 };
 
-async function requirePublisher(ctx: {
-  auth: {
-    getUserIdentity: () => Promise<{
-      subject: string;
-      tokenIdentifier: string;
-    } | null>;
-  };
-}) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity)
-    throw new Error("Sign in is required to manage education content.");
-
-  const allowedUsers = (process.env.ADMIN_CLERK_USER_IDS ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-
-  if (!allowedUsers.includes(identity.subject)) {
-    throw new Error("Only Trinity publishers can manage education content.");
-  }
-
-  return identity;
+async function requirePublisher(ctx: { auth: Auth }) {
+  return await requireRole(ctx, "admin");
 }
 
 function validateContent(args: {
@@ -70,6 +52,16 @@ function validateContent(args: {
 }
 
 export const listPublished = query({
+  args: {},
+  handler: async (ctx) =>
+    await ctx.db
+      .query("educationContent")
+      .withIndex("by_status", (q) => q.eq("status", "published"))
+      .order("desc")
+      .take(50),
+});
+
+export const listPublishedForOpal = internalQuery({
   args: {},
   handler: async (ctx) =>
     await ctx.db

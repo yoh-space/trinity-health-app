@@ -1,7 +1,8 @@
+import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery } from "convex/react";
-import { useRouter, type Href } from "expo-router";
-import { useState } from "react";
+import { usePathname, useRouter, type Href } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -15,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../convex/_generated/api";
+import { AUTHENTICATED_CARE_TAB } from "../constants/authRoutes";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 type RequestType = "clinical" | "counselling";
@@ -25,6 +27,10 @@ const copy = {
     eyebrow: "TRINITY CARE",
     title: "Request care support",
     subtitle: "Choose the kind of support and tell us how to contact you.",
+    loading: "Checking your account…",
+    signInTitle: "Sign in to request care",
+    signInBody: "To protect your request and save it to your account, sign in or create an account first.",
+    signInAction: "Sign in or create an account",
     requestType: "What kind of support are you looking for?",
     clinical: "Clinical health support",
     clinicalHint: "A health concern or nutrition-related support",
@@ -68,6 +74,10 @@ const copy = {
     eyebrow: "ትሪኒቲ እንክብካቤ",
     title: "የእንክብካቤ ድጋፍ ይጠይቁ",
     subtitle: "የሚፈልጉትን ድጋፍ ይምረጡና እንዴት እንደምንገናኝዎ ይንገሩን።",
+    loading: "መለያዎን በማረጋገጥ ላይ…",
+    signInTitle: "የእንክብካቤ ጥያቄ ለመላክ ይግቡ",
+    signInBody: "ጥያቄዎን ለመጠበቅና በመለያዎ ለማስቀመጥ መጀመሪያ ይግቡ ወይም መለያ ይፍጠሩ።",
+    signInAction: "ይግቡ ወይም መለያ ይፍጠሩ",
     requestType: "ምን ዓይነት ድጋፍ ይፈልጋሉ?",
     clinical: "የጤና ባለሙያ ድጋፍ",
     clinicalHint: "የጤና ጉዳይ ወይም ከአመጋገብ ጋር የተያያዘ ድጋፍ",
@@ -120,8 +130,24 @@ function isValidPhone(value: string) {
 
 export default function CareRequestScreen() {
   const router = useRouter();
+  const pathname = usePathname();
+  const { isLoaded, isSignedIn } = useAuth();
   const language = useTrinityStore((state) => state.language);
+  const authReturnTo = useTrinityStore((state) => state.authReturnTo);
+  const setAuthReturnTo = useTrinityStore((state) => state.setAuthReturnTo);
   const t = copy[language];
+
+  useEffect(() => {
+    if (
+      pathname === "/care" &&
+      isLoaded &&
+      isSignedIn &&
+      authReturnTo === AUTHENTICATED_CARE_TAB
+    ) {
+      setAuthReturnTo(null);
+    }
+  }, [authReturnTo, isLoaded, isSignedIn, pathname, setAuthReturnTo]);
+
   const requests = useQuery(api.careRequests.listMine);
   const createRequest = useMutation(api.careRequests.create);
   const [requestType, setRequestType] = useState<RequestType>("clinical");
@@ -175,6 +201,42 @@ export default function CareRequestScreen() {
     setRequestSummary("");
     setConsented(false);
   };
+
+  if (!isLoaded || !isSignedIn) {
+    return (
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
+        <View style={styles.accessContent}>
+          <Text style={styles.eyebrow}>{t.eyebrow}</Text>
+          <View style={styles.accessCard}>
+            <Ionicons
+              name={isLoaded ? "lock-closed-outline" : "time-outline"}
+              size={26}
+              color="#317A48"
+            />
+            <Text style={styles.accessTitle}>
+              {isLoaded ? t.signInTitle : t.loading}
+            </Text>
+            {isLoaded ? (
+              <>
+                <Text style={styles.accessBody}>{t.signInBody}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setAuthReturnTo(AUTHENTICATED_CARE_TAB);
+                    router.push("/sign-in" as Href);
+                  }}
+                  style={styles.accessButton}
+                >
+                  <Text style={styles.accessButtonText}>{t.signInAction}</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
@@ -363,7 +425,11 @@ export default function CareRequestScreen() {
 
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("/public/learn" as Href)}
+            onPress={() =>
+              router.push(
+                (isSignedIn ? "/(app)/(tabs)/learn" : "/public/learn") as Href,
+              )
+            }
             style={styles.learningLink}
           >
             <Text style={styles.learningLinkText}>{t.askOpal}</Text>
@@ -443,6 +509,12 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F7FAF7", flex: 1 },
   keyboardView: { flex: 1 },
   content: { padding: 18, paddingBottom: 34 },
+  accessContent: { flex: 1, padding: 18, paddingTop: 24 },
+  accessCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#DFE8DF", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 20 },
+  accessTitle: { color: "#1C3524", fontFamily: "Righteous_400Regular", fontSize: 17, marginTop: 10, textAlign: "center" },
+  accessBody: { color: "#69786D", fontFamily: "Righteous_400Regular", fontSize: 11, lineHeight: 17, marginTop: 7, textAlign: "center" },
+  accessButton: { alignItems: "center", backgroundColor: "#08783D", borderRadius: 14, flexDirection: "row", gap: 8, justifyContent: "center", marginTop: 17, minHeight: 46, paddingHorizontal: 16 },
+  accessButtonText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 11 },
   eyebrow: {
     color: "#438451",
     fontFamily: "Righteous_400Regular",

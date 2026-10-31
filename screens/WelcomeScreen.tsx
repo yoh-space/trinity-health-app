@@ -142,7 +142,6 @@ export default function WelcomeScreen() {
         />
         <Text style={styles.privacyText}>{copy.privacyNote}</Text>
       </View>
-      {!isTablet && <View style={styles.homeIndicator} />}
     </View>
   );
 
@@ -153,7 +152,9 @@ export default function WelcomeScreen() {
       style={styles.background}
       imageStyle={styles.patternImage}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView
+        style={[styles.safeArea, !isTablet && styles.mobileSafeArea]}
+      >
         {isTablet ? (
           <View style={styles.tabletLayout}>
             <WelcomeStoryPanel />
@@ -183,26 +184,29 @@ const styles = StyleSheet.create({
   background: { backgroundColor: "#E6F1E8", flex: 1 },
   patternImage: { opacity: 0.8 },
   safeArea: { flex: 1 },
-  mobileScroll: { flexGrow: 1, justifyContent: "center", paddingBottom: 10 },
+  mobileSafeArea: { backgroundColor: "#F8FCF9" },
+  mobileScroll: { flexGrow: 1, justifyContent: "center" },
   mobilePhone: {
     alignSelf: "center",
+    flexGrow: 1,
     maxWidth: 460,
     width: "100%",
   },
   phoneContent: {
     backgroundColor: "#F8FCF9",
-    paddingBottom: 20,
+    flexGrow: 1,
+    paddingBottom: 24,
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 12,
   },
   tabletPhoneContent: { paddingHorizontal: 17, paddingTop: 2 },
-  brand: { alignItems: "center", flexDirection: "row", gap: 9, height: 47 },
+  brand: { alignItems: "center", flexDirection: "row", gap: 10, height: 48 },
   brandSymbol: { height: 38, width: 43 },
   brandName: { color: "#1B492C", fontFamily: "Righteous_400Regular", fontSize: 14 },
   heroImageFrame: {
     borderRadius: 18,
     height: 176,
-    marginTop: 3,
+    marginTop: 8,
     overflow: "hidden",
     position: "relative",
     width: "100%",
@@ -231,7 +235,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 5,
   },
-  intro: { paddingTop: 14 },
+  intro: { paddingTop: 16 },
   eyebrow: {
     color: "#39834F",
     fontFamily: "Righteous_400Regular",
@@ -243,7 +247,7 @@ const styles = StyleSheet.create({
     fontFamily: "Righteous_400Regular",
     fontSize: 27,
     lineHeight: 33,
-    marginTop: 7,
+    marginTop: 8,
   },
   titleEmphasis: { color: "#247B44", fontFamily: "Righteous_400Regular" },
   description: {
@@ -251,30 +255,35 @@ const styles = StyleSheet.create({
     fontFamily: "Righteous_400Regular",
     fontSize: 13,
     lineHeight: 19,
-    marginTop: 9,
+    marginTop: 10,
   },
   sdgText: {
     color: "#35453A",
     fontFamily: "Righteous_400Regular",
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 7,
+    marginTop: 8,
   },
   closingText: {
     color: "#267842",
     fontFamily: "Righteous_400Regular",
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 3,
+    marginTop: 4,
   },
-  categories: { flexDirection: "row", gap: 7, marginTop: 11 },
+  categories: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 16,
+  },
   categoryPill: {
     alignItems: "center",
     backgroundColor: "#E8F4EB",
     borderRadius: 18,
     flexDirection: "row",
-    gap: 5,
-    paddingHorizontal: 10,
+    gap: 6,
+    paddingHorizontal: 11,
     paddingVertical: 8,
   },
   categoryText: { color: "#365F42", fontFamily: "Righteous_400Regular", fontSize: 10 },
@@ -282,8 +291,8 @@ const styles = StyleSheet.create({
     borderTopColor: "#A7CBA9",
     borderTopWidth: 1,
     borderStyle: "dashed",
-    marginTop: 12,
-    paddingTop: 10,
+    marginTop: 16,
+    paddingTop: 12,
   },
   languagePrompt: {
     color: "#26382C",
@@ -291,14 +300,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   primaryButton: {
+    alignSelf: "stretch",
     alignItems: "center",
     backgroundColor: "#08713B",
     borderRadius: 16,
     flexDirection: "row",
     gap: 9,
     justifyContent: "center",
-    marginTop: 12,
-    minHeight: 58,
+    marginTop: 16,
+    minHeight: 56,
     paddingHorizontal: 18,
     shadowColor: "#08713B",
     shadowOffset: { width: 0, height: 6 },
@@ -318,8 +328,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 5,
     justifyContent: "center",
-    marginTop: 8,
-    minHeight: 42,
+    marginTop: 6,
+    minHeight: 44,
     paddingHorizontal: 8,
   },
   explorePressed: { opacity: 0.65 },
@@ -336,7 +346,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 7,
     justifyContent: "center",
-    marginTop: 9,
+    marginTop: 12,
     paddingHorizontal: 2,
   },
   privacyText: {
@@ -345,14 +355,6 @@ const styles = StyleSheet.create({
     fontFamily: "Righteous_400Regular",
     fontSize: 11,
     textAlign: "center",
-  },
-  homeIndicator: {
-    alignSelf: "center",
-    backgroundColor: "#26352C",
-    borderRadius: 3,
-    height: 5,
-    marginTop: 18,
-    width: 108,
   },
   tabletLayout: {
     alignItems: "stretch",

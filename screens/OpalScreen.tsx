@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "convex/react";
+import { useAuth } from "@clerk/expo";
+import { useAction } from "convex/react";
 import { anyApi } from "convex/server";
 import { useRouter, type Href } from "expo-router";
 import { useRef, useState } from "react";
@@ -16,167 +17,230 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GuestHomeHeader } from "../components/public/GuestHomeHeader";
-import {
-  getEducationContent,
-  type EducationItem,
-} from "../components/public/educationContent";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
 import {
   classifyOpalQuestion,
+  containsLikelyPersonalDetails,
+  getOpalPrivacyResponse,
   getOpalSafetyResponse,
 } from "../lib/opal/safety";
 import { useTrinityStore } from "../store/useTrinityStore";
 
 type Question = {
   id: string;
-  lessonId: string;
-  sectionIndex: number;
   question: string;
   questionAm: string;
-  keywords: string[];
 };
+type OpalSource = { id: string; title: string; titleAm: string };
 type Message = {
   id: number;
   role: "user" | "opal";
   text: string;
-  sourceId?: string;
+  sources?: OpalSource[];
   safety?: boolean;
+  error?: boolean;
+};
+type AskOpalResult = {
+  answer: string;
+  safety: boolean;
+  sources: OpalSource[];
 };
 
 const questions: Question[] = [
   {
     id: "food-hands",
-    lessonId: "food-safety",
-    sectionIndex: 0,
     question: "How can I keep food preparation clean?",
     questionAm: "ምግብ ሲዘጋጅ ንጽህናን እንዴት መጠበቅ እችላለሁ?",
-    keywords: ["food", "clean", "hand", "wash", "hygiene", "እጅ", "ምግብ", "ንጽህና"],
   },
   {
     id: "pregnancy-food",
-    lessonId: "pregnancy",
-    sectionIndex: 0,
     question: "What foods can I choose during pregnancy?",
     questionAm: "በእርግዝና ጊዜ ምን ልመገብ?",
-    keywords: ["pregnan", "pregnancy", "food", "eat", "እርግዝና", "መመገብ"],
   },
   {
     id: "child-texture",
-    lessonId: "child-nutrition",
-    sectionIndex: 0,
     question: "What texture is right for a young child?",
     questionAm: "ለታዳጊ ህፃን ምን ዓይነት ምግብ ማዘጋጀት አለብኝ?",
-    keywords: ["child", "baby", "texture", "feed", "ህፃን", "ህጻን", "ልጅ"],
   },
   {
     id: "breastfeeding-water",
-    lessonId: "breastfeeding",
-    sectionIndex: 1,
     question: "What should I drink while breastfeeding?",
     questionAm: "ጡት በማጥባት ጊዜ ምን መጠጣት አለብኝ?",
-    keywords: ["breastfeed", "nursing", "drink", "water", "ጡት", "ማጥባት", "ውሃ"],
   },
   {
     id: "safe-water",
-    lessonId: "safe-water",
-    sectionIndex: 2,
     question: "How do I make drinking water safe?",
     questionAm: "የመጠጥ ውሃን እንዴት ደህንነቱን መጠበቅ እችላለሁ?",
-    keywords: ["water", "drink", "safe", "clean", "ውሃ", "መጠጥ"],
   },
 ];
 
 export default function OpalScreen() {
   const router = useRouter();
+  const { isSignedIn } = useAuth();
   const language = useTrinityStore((state) => state.language);
-  const published = useQuery(anyApi.education.listPublished) as
-    | EducationItem[]
-    | undefined;
-  const content = getEducationContent(published);
+  const askOpal = useAction(anyApi.opal.ask);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const [aiConsent, setAiConsent] = useState(false);
   const nextMessageId = useRef(0);
   const am = language === "am";
+  const homeRoute = isSignedIn ? AUTHENTICATED_HOME_TABS : "/public/home";
+  const profileRoute = isSignedIn ? "/(app)/(tabs)/profile" : "/public/profile";
+  const savedRoute = isSignedIn ? "/(app)/(tabs)/saved" : "/public/saved";
 
-  const answerQuestion = (text: string, preferredId?: string) => {
-    const intent = classifyOpalQuestion(text);
-    const normalized = text.toLocaleLowerCase();
-    const matched =
-      intent === "safe"
-        ? (questions.find((q) => q.id === preferredId) ??
-          questions
-            .map((q) => ({
-              q,
-              score: q.keywords.filter((k) =>
-                normalized.includes(k.toLocaleLowerCase()),
-              ).length,
-            }))
-            .filter(({ score }) => score > 0)
-            .sort((a, b) => b.score - a.score)[0]?.q)
-        : undefined;
-    const lesson = matched
-      ? content.find((item) => item._id === matched.lessonId)
-      : undefined;
-    const section =
-      lesson?.sections?.[matched?.sectionIndex ?? -1] ?? lesson?.sections?.[0];
-    const response =
-      intent !== "safe"
-        ? getOpalSafetyResponse(intent, language)
-        : lesson
-          ? section
-            ? am
-              ? section.bodyAm
-              : section.body
-            : am
-              ? lesson.contentAm
-              : lesson.content
-          : am
-            ? "በአሁኑ ጊዜ በተዘጋጁ የትምህርት ማስታወሻዎች ውስጥ ለዚህ ጥያቄ መልስ የለኝም። ከብቁ የጤና ባለሙያ ጋር ይነጋገሩ።"
-            : "I can only help with questions covered by the prepared learning notes. I don’t have a source-backed answer for this one; please ask a qualified health professional.";
+  const sendToGemini = async (text: string) => {
     const userMessageId = nextMessageId.current++;
     const opalMessageId = nextMessageId.current++;
     setMessages((previous) => [
       ...previous,
       { id: userMessageId, role: "user", text },
-      {
-        id: opalMessageId,
-        role: "opal",
-        text: response,
-        ...(intent !== "safe" ? { safety: true } : {}),
-        ...(lesson ? { sourceId: lesson._id } : {}),
-      },
     ]);
     setDraft("");
+    setIsSending(true);
+
+    try {
+      const result = (await askOpal({
+        consented: true,
+        language,
+        question: text,
+      })) as AskOpalResult;
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: opalMessageId,
+          role: "opal",
+          text: result.answer,
+          safety: result.safety,
+          sources: result.sources,
+        },
+      ]);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      let message: string;
+      if (code.includes("OPAL_NOT_CONFIGURED")) {
+        message = am
+          ? "ኦፓል ገና ከGemini ጋር አልተገናኘም። በConvex ቅንብሮች ውስጥ GEMINI_API_KEY ያክሉ።"
+          : "Opal is not connected to Gemini yet. Add GEMINI_API_KEY in Convex environment settings.";
+      } else if (code.includes("OPAL_RATE_LIMIT")) {
+        message = am
+          ? "የGemini ነፃ የጥያቄ ገደብ ደርሷል። ቆይተው እንደገና ይሞክሩ።"
+          : "Gemini’s free request limit has been reached. Please try again later.";
+      } else if (code.includes("OPAL_INVALID_API_KEY")) {
+        message = am
+          ? "የGemini API ቁልፉ አልሰራም። በConvex ቅንብሮች ውስጥ GEMINI_API_KEYን ያረጋግጡ።"
+          : "The Gemini API key was rejected. Check GEMINI_API_KEY in Convex settings.";
+      } else {
+        message = am
+          ? "ኦፓል አሁን መልስ ማግኘት አልቻለም። ኢንተርኔትዎን ያረጋግጡና እንደገና ይሞክሩ።"
+          : "Opal couldn’t get an answer right now. Check your connection and try again.";
+      }
+      setMessages((previous) => [
+        ...previous,
+        { id: opalMessageId, role: "opal", text: message, error: true },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   };
+
+  const requestAnswer = (rawText: string) => {
+    const text = rawText.trim();
+    if (!text || isSending) return;
+
+    if (text.length > 1000) {
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: nextMessageId.current++,
+          role: "opal",
+          text: am
+            ? "ጥያቄው በጣም ረጅም ነው። እስከ 1000 ፊደላት ድረስ ያሳጥሩት።"
+            : "That question is too long. Please shorten it to 1,000 characters or less.",
+          error: true,
+        },
+      ]);
+      return;
+    }
+
+    if (containsLikelyPersonalDetails(text)) {
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: nextMessageId.current++,
+          role: "opal",
+          text: getOpalPrivacyResponse(language),
+          safety: true,
+        },
+      ]);
+      setDraft("");
+      return;
+    }
+
+    const safetyIntent = classifyOpalQuestion(text);
+    if (safetyIntent !== "safe") {
+      const userMessageId = nextMessageId.current++;
+      const opalMessageId = nextMessageId.current++;
+      setMessages((previous) => [
+        ...previous,
+        { id: userMessageId, role: "user", text },
+        {
+          id: opalMessageId,
+          role: "opal",
+          text: getOpalSafetyResponse(safetyIntent, language),
+          safety: true,
+        },
+      ]);
+      setDraft("");
+      return;
+    }
+
+    if (aiConsent) {
+      void sendToGemini(text);
+      return;
+    }
+
+    Alert.alert(
+      am ? "Gemini የሚቀበለው መረጃ" : "What Gemini will receive",
+      am
+        ? "ኦፓል አጠቃላይ የጤና ትምህርት ይሰጣል፤ የግል ምርመራ ወይም ሕክምና አይሰጥም። ጥያቄዎንና ተዛማጅ የታተመ የትምህርት ጽሑፍን ለGoogle Gemini ይልካል። የመገለጫዎ መረጃና የውይይት ታሪክ አይላኩም። በነፃ ደረጃ Google የሚላኩ ጥያቄዎችንና መልሶችን ምርቶቹን ለማሻሻል ሊጠቀምባቸው እና የሰው ገምጋሚዎች ሊያዩአቸው ይችላሉ። ስም፣ የመገናኛ ወይም የግል የጤና መረጃ አያስገቡ።"
+        : "Opal provides general health education, not personal diagnosis or treatment. It sends your question and relevant published lesson text to Google Gemini. Your onboarding profile and earlier chat messages are not sent. On the free tier, Google may use submitted questions and answers to improve its products, and human reviewers may review them. Don’t include names, contact details, or personal health information.",
+      [
+        { text: am ? "ተመለስ" : "Cancel", style: "cancel" },
+        {
+          text: am ? "እስማማለሁ እና ቀጥል" : "Agree & continue",
+          onPress: () => {
+            setAiConsent(true);
+            void sendToGemini(text);
+          },
+        },
+      ],
+    );
+  };
+
   const submitDraft = () => {
-    const text = draft.trim();
-    if (text) answerQuestion(text);
+    requestAnswer(draft);
   };
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
         <View style={styles.pageHeader}>
           <GuestHomeHeader
             language={language}
-            onHomePress={() => router.replace("/public/home" as Href)}
-            onSavedPress={() => router.push("/public/saved" as Href)}
-            onSettingsPress={() =>
-              Alert.alert(
-                am ? "ቅንብሮች" : "Settings",
-                am
-                  ? "የቋንቋ ቅንብሮችን ከመነሻ ገጽ ይክፈቱ።"
-                  : "Open the language settings from the Home screen.",
-              )
-            }
+            onHomePress={() => router.replace(homeRoute as Href)}
+            onSavedPress={() => router.push(savedRoute as Href)}
+            onSettingsPress={() => router.push(profileRoute as Href)}
           />
         </View>
         <ScrollView
           contentContainerStyle={styles.conversation}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          style={styles.conversationScroll}
         >
           <Text style={styles.eyebrow}>
             {am ? "ትንሽ መመሪያ" : "A LITTLE GUIDANCE"}
@@ -184,8 +248,8 @@ export default function OpalScreen() {
           <Text style={styles.title}>{am ? "ኦፓልን ይጠይቁ" : "Ask Opal"}</Text>
           <Text style={styles.subtitle}>
             {am
-              ? "መልሶች ከዚህ ማሳያ ውስጥ ከተካተቱ ማስታወሻዎች ይመጣሉ።"
-              : "Answers matched from notes bundled inside this prototype."}
+              ? "ከተዛማጅ የታተሙ ትምህርቶች ጋር Gemini አጠቃላይ መልስ ይሰጣል።"
+              : "Gemini gives general answers using relevant published lessons."}
           </Text>
           {!messages.length && (
             <View style={styles.welcomeRow}>
@@ -198,8 +262,8 @@ export default function OpalScreen() {
                 </Text>
                 <Text style={styles.welcomeText}>
                   {am
-                    ? "ከታች ያለውን ጥያቄ ይምረጡ ወይም የራስዎን ይጻፉ።"
-                    : "Pick a question below or type your own. I can share notes on food safety, water, pregnancy, breastfeeding, and feeding young children."}
+                    ? "ከታች ያለውን ይምረጡ ወይም አጠቃላይ ጥያቄ ይጻፉ። የመገለጫ መረጃዎ አይላክም።"
+                    : "Pick a question below or ask your own general question. Your onboarding profile is not sent."}
                 </Text>
               </View>
             </View>
@@ -208,9 +272,6 @@ export default function OpalScreen() {
             <View style={styles.messageList}>
               {messages.map((message) => {
                 const isOpal = message.role === "opal";
-                const source = message.sourceId
-                  ? content.find((item) => item._id === message.sourceId)
-                  : undefined;
                 return (
                   <View
                     key={message.id}
@@ -230,7 +291,9 @@ export default function OpalScreen() {
                         isOpal
                           ? message.safety
                             ? styles.safetyBubble
-                            : styles.opalBubble
+                            : message.error
+                              ? styles.errorBubble
+                              : styles.opalBubble
                           : styles.userBubble,
                       ]}
                     >
@@ -242,12 +305,13 @@ export default function OpalScreen() {
                       >
                         {message.text}
                       </Text>
-                      {source && (
+                      {message.sources?.map((source) => (
                         <Pressable
                           accessibilityRole="link"
+                          key={source.id}
                           onPress={() =>
                             router.push(
-                              `/public/article/${encodeURIComponent(source._id)}` as Href,
+                              `/public/article/${encodeURIComponent(source.id)}` as Href,
                             )
                           }
                           style={styles.sourceLink}
@@ -262,12 +326,25 @@ export default function OpalScreen() {
                             {am ? source.titleAm : source.title}
                           </Text>
                         </Pressable>
-                      )}
+                      ))}
                     </View>
                   </View>
                 );
               })}
+              {isSending && (
+                <View style={styles.messageRow}>
+                  <View style={styles.messageLeaf}>
+                    <Ionicons name="leaf" size={13} color="#2E8A4D" />
+                  </View>
+                  <View style={[styles.messageBubble, styles.opalBubble]}>
+                    <Text style={styles.messageText}>
+                      {am ? "ኦፓል እያሰበ ነው..." : "Opal is thinking..."}
+                    </Text>
+                  </View>
+                </View>
+              )}
               <Pressable
+                disabled={isSending}
                 onPress={() => setMessages([])}
                 style={styles.resetButton}
               >
@@ -283,11 +360,9 @@ export default function OpalScreen() {
               <Pressable
                 accessibilityRole="button"
                 key={question.id}
+                disabled={isSending}
                 onPress={() =>
-                  answerQuestion(
-                    am ? question.questionAm : question.question,
-                    question.id,
-                  )
+                  requestAnswer(am ? question.questionAm : question.question)
                 }
                 style={({ pressed }) => [
                   styles.quickQuestion,
@@ -312,6 +387,7 @@ export default function OpalScreen() {
             <TextInput
               accessibilityLabel={am ? "ጥያቄዎን ይጻፉ" : "Ask Opal a question"}
               onChangeText={setDraft}
+              editable={!isSending}
               onSubmitEditing={submitDraft}
               placeholder={
                 am
@@ -326,17 +402,20 @@ export default function OpalScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={am ? "ጥያቄ ላክ" : "Send question"}
-              disabled={!draft.trim()}
+              disabled={!draft.trim() || isSending}
               onPress={submitDraft}
-              style={[styles.sendButton, !draft.trim() && styles.sendDisabled]}
+              style={[
+                styles.sendButton,
+                (!draft.trim() || isSending) && styles.sendDisabled,
+              ]}
             >
               <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
             </Pressable>
           </View>
           <Text style={styles.disclaimer}>
             {am
-              ? "ስም፣ ስልክ ቁጥር ወይም የጤና ዝርዝር አይጻፉ። መልዕክቶች ለዚህ ክፍለ ጊዜ ብቻ ናቸው።"
-              : "Please don't type names, phone numbers, or health details. Messages stay on this screen for this session only."}
+              ? "አጠቃላይ ትምህርት ብቻ ነው። የመገለጫ መረጃ አይላክም፤ የግል ዝርዝሮችን አያስገቡ።"
+              : "General education only. Your profile isn’t sent; don’t include personal details."}
           </Text>
         </View>
       </KeyboardAvoidingView>
@@ -347,6 +426,7 @@ export default function OpalScreen() {
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F8FBF8", flex: 1 },
   keyboardView: { flex: 1 },
+  conversationScroll: { flex: 1 },
   pageHeader: {
     backgroundColor: "#FFFFFF",
     borderBottomColor: "#E2EAE3",
@@ -434,6 +514,12 @@ const styles = StyleSheet.create({
   safetyBubble: {
     backgroundColor: "#FFF8E8",
     borderColor: "#E6C982",
+    borderWidth: 1,
+    borderBottomLeftRadius: 4,
+  },
+  errorBubble: {
+    backgroundColor: "#FFF1EE",
+    borderColor: "#EBC6BD",
     borderWidth: 1,
     borderBottomLeftRadius: 4,
   },

@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import {
@@ -15,24 +14,57 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../convex/_generated/api";
 import { type Id } from "../convex/_generated/dataModel";
+import {
+  CareRequestCard,
+  type StaffRequestUpdateStatus,
+} from "../components/staff/CareRequestCard";
+import {
+  StaffMetricCard,
+  StaffQueueFilterButton,
+} from "../components/staff/StaffDashboardPrimitives";
+import {
+  StaffAccountStateScreen,
+  StaffBottomNavigation,
+} from "../components/staff/StaffDashboardNavigation";
+import { StaffUpcomingAppointments } from "../components/staff/StaffUpcomingAppointments";
+import { useStaffAccount } from "../hooks/useStaffAccount";
 
 type QueueFilter = "submitted" | "inReview" | "contacted";
-type QueueStatus = "inReview" | "contacted" | "closed";
+
+const filters: { status: QueueFilter; label: string }[] = [
+  { status: "submitted", label: "New" },
+  { status: "inReview", label: "In review" },
+  { status: "contacted", label: "Contacted" },
+];
 
 export default function ClinicalDashboardScreen() {
   const router = useRouter();
-  const { isLoaded, isSignedIn } = useAuth();
-  const queue = useQuery(
-    api.careRequests.listClinicalQueue,
-    isLoaded && isSignedIn ? {} : "skip",
-  );
-  const updateStatus = useMutation(api.careRequests.updateClinicalStatus);
+  const { state: staffAccountState, user, profile } = useStaffAccount("clinician");
   const [filter, setFilter] = useState<QueueFilter>("submitted");
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const counts = useQuery(
+    api.careRequests.getClinicalQueueCounts,
+    staffAccountState === "ready" ? {} : "skip",
+  );
+  const queue = usePaginatedQuery(
+    api.careRequests.listClinicalQueuePage,
+    staffAccountState === "ready" ? { status: filter } : "skip",
+    { initialNumItems: 20 },
+  );
+  const resources = useQuery(
+    api.education.listPublished,
+    staffAccountState === "ready" ? {} : "skip",
+  );
+  const appointments = useQuery(
+    api.appointments.listMyAppointments,
+    staffAccountState === "ready" ? {} : "skip",
+  );
+  const updateStatus = useMutation(api.careRequests.updateClinicalStatus);
+
   const changeStatus = async (
     requestId: Id<"careRequests">,
-    status: QueueStatus,
+    status: StaffRequestUpdateStatus,
   ) => {
     setBusyId(String(requestId));
     try {
@@ -63,42 +95,19 @@ export default function ClinicalDashboardScreen() {
     );
   };
 
-  if (!isLoaded) {
-    return <AccessState loading title="Loading clinical access…" body="" />;
-  }
-
-  if (!isSignedIn) {
+  if (staffAccountState !== "ready") {
     return (
-      <AccessState
-        icon="lock-closed-outline"
-        title="Sign in required"
-        body="Clinical requests are available only to authenticated, authorized staff."
-        actionLabel="Sign in"
-        onAction={() => router.push("/sign-in" as Href)}
+      <StaffAccountStateScreen
+        state={staffAccountState}
+        role="clinician"
+        initialName={user?.fullName ?? ""}
       />
     );
   }
 
-  if (queue === undefined) {
-    return <AccessState loading title="Loading clinical queue…" body="" />;
-  }
-
-  if (!queue.authorized) {
-    return (
-      <AccessState
-        icon="shield-checkmark-outline"
-        title="Clinical access not enabled"
-        body="This account is not authorized to view clinical requests. Contact your platform administrator if you believe this is an error."
-        actionLabel="Back to staff portal"
-        onAction={() => router.replace("/staff-portal" as Href)}
-      />
-    );
-  }
-
-  const requests = queue.requests.filter((request) => request.status === filter);
-  const newCount = queue.requests.filter((request) => request.status === "submitted").length;
-  const reviewCount = queue.requests.filter((request) => request.status === "inReview").length;
-  const contactedCount = queue.requests.filter((request) => request.status === "contacted").length;
+  const displayName = profile?.displayName.trim().split(/\s+/)[0] || user?.firstName?.trim() || "Clinician";
+  const isLoadingQueue = queue.status === "LoadingFirstPage";
+  const isLoadingMore = queue.status === "LoadingMore";
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
@@ -108,60 +117,76 @@ export default function ClinicalDashboardScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>TRINITY · CLINICAL</Text>
-            <Text style={styles.title}>Clinical review desk</Text>
+            <Text style={styles.eyebrow}>TRINITY · CLINICIAN DESK</Text>
+            <Text style={styles.title}>Hello, {displayName}.</Text>
             <Text style={styles.subtitle}>
-              Clinical requests only · access is logged
+              Review clinical requests and support families with appropriate care.
             </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back to staff portal"
-            onPress={() => router.replace("/staff-portal" as Href)}
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={18} color="#386248" />
-          </Pressable>
         </View>
 
         <View style={styles.metricsRow}>
-          <MetricCard label="New" value={newCount} icon="mail-unread-outline" />
-          <MetricCard label="In review" value={reviewCount} icon="eye-outline" />
-          <MetricCard
-            label="Active total"
-            value={newCount + reviewCount + contactedCount}
-            icon="clipboard-outline"
+          <StaffMetricCard
+            label="New requests"
+            value={counts?.submitted ?? "—"}
+            icon="mail-unread-outline"
+          />
+          <StaffMetricCard
+            label="In review"
+            value={counts?.inReview ?? "—"}
+            icon="eye-outline"
+          />
+          <StaffMetricCard
+            label="Contacted"
+            value={counts?.contacted ?? "—"}
+            icon="call-outline"
           />
         </View>
 
-        <View style={styles.safetyNote}>
-          <Ionicons name="lock-closed-outline" size={15} color="#4D7A59" />
-          <Text style={styles.safetyText}>
-            Review only the information needed to respond. Do not copy request details into unapproved channels or enter diagnoses in this dashboard.
-          </Text>
+        <StaffUpcomingAppointments appointments={appointments} />
+
+        <View style={styles.scopeNote}>
+          <Ionicons name="medkit-outline" size={16} color="#4D7A59" />
+          <View style={styles.scopeCopy}>
+            <Text style={styles.scopeTitle}>Care scope</Text>
+            <Text style={styles.scopeText}>
+              Use this queue for follow-up on submitted requests. For urgent warning signs, direct families to the nearest health facility.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionCopy}>
+            <Text style={styles.sectionTitle}>Clinical requests</Text>
+            <Text style={styles.sectionSubtitle}>
+              Submitted by families requesting clinical support
+            </Text>
+          </View>
         </View>
 
         <View style={styles.filterRow} accessibilityRole="radiogroup">
-          <FilterButton
-            label={`New (${newCount})`}
-            selected={filter === "submitted"}
-            onPress={() => setFilter("submitted")}
-          />
-          <FilterButton
-            label={`In review (${reviewCount})`}
-            selected={filter === "inReview"}
-            onPress={() => setFilter("inReview")}
-          />
-          <FilterButton
-            label={`Contacted (${contactedCount})`}
-            selected={filter === "contacted"}
-            onPress={() => setFilter("contacted")}
-          />
+          {filters.map((item) => (
+            <StaffQueueFilterButton
+              key={item.status}
+              label={`${item.label} (${counts?.[item.status] ?? "—"})`}
+              selected={filter === item.status}
+              onPress={() => setFilter(item.status)}
+            />
+          ))}
         </View>
 
-        {requests.length === 0 ? (
+        {isLoadingQueue ? (
+          <View style={styles.loadingQueue}>
+            <ActivityIndicator color="#247640" />
+            <Text style={styles.loadingText}>Loading clinical requests…</Text>
+          </View>
+        ) : queue.results.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="checkmark-done-outline" size={25} color="#76A17E" />
+            <Ionicons
+              name="checkmark-done-outline"
+              size={25}
+              color="#76A17E"
+            />
             <Text style={styles.emptyTitle}>
               {filter === "submitted"
                 ? "No new requests"
@@ -170,284 +195,289 @@ export default function ClinicalDashboardScreen() {
                   : "No contacted requests awaiting closure"}
             </Text>
             <Text style={styles.emptyBody}>
-              New clinical requests will appear here after consented submission.
+              The queue updates when families submit a clinical request.
             </Text>
           </View>
         ) : (
           <View style={styles.requestList}>
-            {requests.map((request) => (
-              <View key={request._id} style={styles.requestCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.requestBadge}>
-                    <Ionicons name="medkit-outline" size={14} color="#317A48" />
-                    <Text style={styles.requestBadgeText}>Clinical</Text>
-                  </View>
-                  <Text style={styles.statusBadge}>
-                    {request.status === "submitted"
-                      ? "New"
-                      : request.status === "inReview"
-                        ? "In review"
-                        : "Contacted"}
-                  </Text>
-                </View>
-
-                <Text selectable style={styles.requestId}>
-                  {request._id}
-                </Text>
-                <Text style={styles.requestDate}>
-                  Submitted {new Date(request.createdAt).toLocaleString()}
-                </Text>
-
-                {request.requestSummary ? (
-                  <View style={styles.summaryBox}>
-                    <Text style={styles.detailLabel}>User summary</Text>
-                    <Text selectable style={styles.summaryText}>
-                      {request.requestSummary}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.noSummary}>No summary supplied.</Text>
-                )}
-
-                <View style={styles.contactBox}>
-                  <Ionicons
-                    name={request.contactMethod === "email" ? "mail-outline" : "call-outline"}
-                    size={15}
-                    color="#438451"
-                  />
-                  <View style={styles.contactCopy}>
-                    <Text style={styles.detailLabel}>
-                      Preferred contact · {request.contactMethod}
-                    </Text>
-                    <Text selectable style={styles.contactValue}>
-                      {request.contactDetails}
-                    </Text>
-                  </View>
-                </View>
-
-                {request.assignedElsewhere ? (
-                  <View style={styles.assignmentNotice}>
-                    <Ionicons name="person-outline" size={14} color="#8A6B2C" />
-                    <Text style={styles.assignmentText}>
-                      Another clinical staff member has claimed this request.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.actions}>
-                    {request.status === "submitted" ? (
-                      <ActionButton
-                        label={busyId === String(request._id) ? "Saving…" : "Start review"}
-                        icon="eye-outline"
-                        disabled={busyId === String(request._id)}
-                        onPress={() => void changeStatus(request._id, "inReview")}
-                      />
-                    ) : request.status === "inReview" && request.assignedToMe ? (
-                      <ActionButton
-                        label={busyId === String(request._id) ? "Saving…" : "Mark contacted"}
-                        icon="call-outline"
-                        disabled={busyId === String(request._id)}
-                        onPress={() => void changeStatus(request._id, "contacted")}
-                      />
-                    ) : request.status === "contacted" && request.assignedToMe ? (
-                      <ActionButton
-                        label="Close request"
-                        icon="checkmark-circle-outline"
-                        secondary
-                        disabled={busyId === String(request._id)}
-                        onPress={() => closeRequest(request._id)}
-                      />
-                    ) : request.status === "inReview" ? (
-                      <ActionButton
-                        label="Claim for review"
-                        icon="hand-left-outline"
-                        disabled={busyId === String(request._id)}
-                        onPress={() => void changeStatus(request._id, "inReview")}
-                      />
-                    ) : request.status === "contacted" ? (
-                      <View style={styles.assignmentNotice}>
-                        <Ionicons name="person-outline" size={14} color="#8A6B2C" />
-                        <Text style={styles.assignmentText}>
-                          This request has no recorded assignee. Contact an administrator.
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-                )}
-              </View>
+            {queue.results.map((request) => (
+              <CareRequestCard
+                key={request._id}
+                request={request}
+                staffRole="clinical"
+                busy={busyId === String(request._id)}
+                onUpdateStatus={(status) =>
+                  void changeStatus(request._id, status)
+                }
+                onCloseRequest={() => closeRequest(request._id)}
+              />
             ))}
           </View>
         )}
 
-        <Text style={styles.footerNote}>
-          Queue access is limited to the clinical staff allowlist. Status changes are audited; request contents are not copied into the audit log.
-        </Text>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function AccessState({
-  loading,
-  icon = "shield-outline",
-  title,
-  body,
-  actionLabel,
-  onAction,
-}: {
-  loading?: boolean;
-  icon?: keyof typeof Ionicons.glyphMap;
-  title: string;
-  body: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
-      <View style={styles.accessState}>
-        {loading ? (
-          <ActivityIndicator color="#247640" />
-        ) : (
-          <Ionicons name={icon} size={27} color="#4D7A59" />
-        )}
-        <Text style={styles.accessTitle}>{title}</Text>
-        {!!body && <Text style={styles.accessBody}>{body}</Text>}
-        {actionLabel && onAction ? (
-          <Pressable onPress={onAction} style={styles.accessButton}>
-            <Text style={styles.accessButtonText}>{actionLabel}</Text>
+        {queue.status === "CanLoadMore" || queue.status === "LoadingMore" ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={isLoadingMore}
+            onPress={() => queue.loadMore(20)}
+            style={styles.loadMoreButton}
+          >
+            {isLoadingMore ? (
+              <ActivityIndicator color="#267642" size="small" />
+            ) : (
+              <Text style={styles.loadMoreText}>Load more requests</Text>
+            )}
           </Pressable>
         ) : null}
-      </View>
+
+        <View style={styles.toolkitSection}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionCopy}>
+              <Text style={styles.sectionTitle}>Education toolkit</Text>
+              <Text style={styles.sectionSubtitle}>
+                Published Trinity resources for family learning
+              </Text>
+            </View>
+          </View>
+
+          {resources === undefined ? (
+            <View style={styles.resourcesLoading}>
+              <ActivityIndicator color="#247640" size="small" />
+            </View>
+          ) : resources.length === 0 ? (
+            <View style={styles.resourcesEmpty}>
+              <Text style={styles.emptyBody}>
+                No published education resources are available yet.
+              </Text>
+            </View>
+          ) : (
+            resources.slice(0, 3).map((resource) => (
+              <Pressable
+                key={resource._id}
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push(
+                    `/public/article/${encodeURIComponent(String(resource._id))}` as Href,
+                  )
+                }
+                style={styles.resourceCard}
+              >
+                <View style={styles.resourceIcon}>
+                  <Ionicons name="book-outline" size={18} color="#347447" />
+                </View>
+                <View style={styles.resourceCopy}>
+                  <Text style={styles.resourceCategory}>{resource.category}</Text>
+                  <Text numberOfLines={2} style={styles.resourceTitle}>
+                    {resource.title}
+                  </Text>
+                  <Text style={styles.resourceReadTime}>
+                    {resource.readMinutes} min read
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#849187" />
+              </Pressable>
+            ))
+          )}
+        </View>
+
+        <Text style={styles.footerNote}>
+          Clinician access is restricted by the Clerk role claim. Request content is excluded from the audit log.
+        </Text>
+      </ScrollView>
+      <StaffBottomNavigation role="clinician" selected="home" />
     </SafeAreaView>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: number;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  return (
-    <View style={styles.metricCard}>
-      <Ionicons name={icon} size={16} color="#4D8B5A" />
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function FilterButton({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
-      onPress={onPress}
-      style={[styles.filterButton, selected && styles.filterButtonSelected]}
-    >
-      <Text style={[styles.filterText, selected && styles.filterTextSelected]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function ActionButton({
-  label,
-  icon,
-  onPress,
-  disabled,
-  secondary,
-}: {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
-  disabled?: boolean;
-  secondary?: boolean;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      style={[
-        styles.actionButton,
-        secondary && styles.secondaryAction,
-        disabled && styles.actionDisabled,
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={14}
-        color={secondary ? "#4E7057" : "#FFFFFF"}
-      />
-      <Text style={[styles.actionText, secondary && styles.secondaryActionText]}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#F5F8F5", flex: 1 },
   content: { padding: 16, paddingBottom: 34 },
-  header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  header: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "space-between",
+  },
   headerCopy: { flex: 1 },
-  eyebrow: { color: "#438451", fontFamily: "Righteous_400Regular", fontSize: 9, letterSpacing: 1 },
-  title: { color: "#1C3524", fontFamily: "Righteous_400Regular", fontSize: 23, marginTop: 6 },
-  subtitle: { color: "#6D7D71", fontFamily: "Righteous_400Regular", fontSize: 9, marginTop: 5 },
-  backButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#DFE8DF", borderRadius: 11, borderWidth: 1, height: 38, justifyContent: "center", width: 38 },
+  eyebrow: {
+    color: "#438451",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  title: {
+    color: "#1C3524",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 23,
+    marginTop: 6,
+  },
+  subtitle: {
+    color: "#6D7D71",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 5,
+  },
   metricsRow: { flexDirection: "row", gap: 8, marginTop: 17 },
-  metricCard: { backgroundColor: "#FFFFFF", borderColor: "#E0E9E1", borderRadius: 13, borderWidth: 1, flex: 1, minHeight: 78, padding: 9 },
-  metricValue: { color: "#245D37", fontFamily: "Righteous_400Regular", fontSize: 20, marginTop: 5 },
-  metricLabel: { color: "#738177", fontFamily: "Righteous_400Regular", fontSize: 8, marginTop: 2 },
-  safetyNote: { alignItems: "flex-start", backgroundColor: "#EEF5EF", borderRadius: 11, flexDirection: "row", gap: 8, marginTop: 13, padding: 10 },
-  safetyText: { color: "#5A6D5F", flex: 1, fontFamily: "Righteous_400Regular", fontSize: 8, lineHeight: 12 },
-  filterRow: { backgroundColor: "#EAF0EA", borderRadius: 12, flexDirection: "row", gap: 5, marginTop: 18, padding: 4 },
-  filterButton: { alignItems: "center", borderRadius: 9, flex: 1, justifyContent: "center", minHeight: 35, paddingHorizontal: 5 },
-  filterButtonSelected: { backgroundColor: "#FFFFFF" },
-  filterText: { color: "#728176", fontFamily: "Righteous_400Regular", fontSize: 9 },
-  filterTextSelected: { color: "#276B3A" },
+  scopeNote: {
+    alignItems: "flex-start",
+    backgroundColor: "#EEF5EF",
+    borderRadius: 11,
+    flexDirection: "row",
+    gap: 9,
+    marginTop: 13,
+    padding: 11,
+  },
+  scopeCopy: { flex: 1, gap: 3 },
+  scopeTitle: {
+    color: "#386248",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+  },
+  scopeText: {
+    color: "#5A6D5F",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+    lineHeight: 14,
+  },
+  sectionHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 22,
+  },
+  sectionCopy: { flex: 1 },
+  sectionTitle: {
+    color: "#1C3524",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 17,
+  },
+  sectionSubtitle: {
+    color: "#718077",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 4,
+  },
+  filterRow: {
+    backgroundColor: "#EAF0EA",
+    borderRadius: 12,
+    flexDirection: "row",
+    gap: 5,
+    marginTop: 12,
+    padding: 4,
+  },
+  loadingQueue: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E0E9E1",
+    borderRadius: 15,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 88,
+  },
+  loadingText: {
+    color: "#6D7D71",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 10,
+  },
   requestList: { gap: 10, marginTop: 12 },
-  requestCard: { backgroundColor: "#FFFFFF", borderColor: "#E0E9E1", borderRadius: 15, borderWidth: 1, padding: 13 },
-  cardHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  requestBadge: { alignItems: "center", backgroundColor: "#EEF7F0", borderRadius: 10, flexDirection: "row", gap: 5, paddingHorizontal: 8, paddingVertical: 5 },
-  requestBadgeText: { color: "#357347", fontFamily: "Righteous_400Regular", fontSize: 8 },
-  statusBadge: { backgroundColor: "#F1F4F1", borderRadius: 10, color: "#617266", fontFamily: "Righteous_400Regular", fontSize: 8, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 5 },
-  requestId: { color: "#506457", fontFamily: "Righteous_400Regular", fontSize: 8, marginTop: 9 },
-  requestDate: { color: "#879489", fontFamily: "Righteous_400Regular", fontSize: 8, marginTop: 3 },
-  summaryBox: { backgroundColor: "#F7FAF7", borderRadius: 10, marginTop: 12, padding: 10 },
-  detailLabel: { color: "#7B897E", fontFamily: "Righteous_400Regular", fontSize: 8 },
-  summaryText: { color: "#35483A", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 15, marginTop: 5 },
-  noSummary: { color: "#879489", fontFamily: "Righteous_400Regular", fontSize: 9, fontStyle: "italic", marginTop: 13 },
-  contactBox: { alignItems: "center", backgroundColor: "#FAFCFA", borderColor: "#E6ECE6", borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 9, marginTop: 10, padding: 9 },
-  contactCopy: { flex: 1, gap: 4 },
-  contactValue: { color: "#2E4936", fontFamily: "Righteous_400Regular", fontSize: 10 },
-  assignmentNotice: { alignItems: "center", backgroundColor: "#FFF7E8", borderRadius: 9, flexDirection: "row", gap: 7, marginTop: 11, padding: 9 },
-  assignmentText: { color: "#73591F", flex: 1, fontFamily: "Righteous_400Regular", fontSize: 8 },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 12 },
-  actionButton: { alignItems: "center", backgroundColor: "#267642", borderRadius: 10, flexDirection: "row", gap: 6, justifyContent: "center", minHeight: 37, paddingHorizontal: 10 },
-  secondaryAction: { backgroundColor: "#F3F8F3", borderColor: "#D4E3D6", borderWidth: 1 },
-  actionDisabled: { opacity: 0.5 },
-  actionText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 8 },
-  secondaryActionText: { color: "#4E7057" },
-  emptyState: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#E0E9E1", borderRadius: 15, borderWidth: 1, marginTop: 12, paddingHorizontal: 20, paddingVertical: 25 },
-  emptyTitle: { color: "#34523C", fontFamily: "Righteous_400Regular", fontSize: 12, marginTop: 8 },
-  emptyBody: { color: "#78877C", fontFamily: "Righteous_400Regular", fontSize: 9, lineHeight: 14, marginTop: 5, textAlign: "center" },
-  footerNote: { color: "#8A968D", fontFamily: "Righteous_400Regular", fontSize: 8, lineHeight: 12, marginTop: 18, textAlign: "center" },
-  accessState: { alignItems: "center", flex: 1, justifyContent: "center", paddingHorizontal: 28 },
-  accessTitle: { color: "#244B30", fontFamily: "Righteous_400Regular", fontSize: 17, marginTop: 11, textAlign: "center" },
-  accessBody: { color: "#6C7D70", fontFamily: "Righteous_400Regular", fontSize: 10, lineHeight: 16, marginTop: 8, textAlign: "center" },
-  accessButton: { alignItems: "center", backgroundColor: "#267642", borderRadius: 11, marginTop: 18, minHeight: 42, justifyContent: "center", paddingHorizontal: 17 },
-  accessButtonText: { color: "#FFFFFF", fontFamily: "Righteous_400Regular", fontSize: 10 },
+  emptyState: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E0E9E1",
+    borderRadius: 15,
+    borderWidth: 1,
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 25,
+  },
+  emptyTitle: {
+    color: "#34523C",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 12,
+    marginTop: 8,
+  },
+  emptyBody: {
+    color: "#78877C",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 9,
+    lineHeight: 14,
+    marginTop: 5,
+    textAlign: "center",
+  },
+  loadMoreButton: {
+    alignItems: "center",
+    borderColor: "#D5E5D7",
+    borderRadius: 11,
+    borderWidth: 1,
+    justifyContent: "center",
+    marginTop: 12,
+    minHeight: 42,
+  },
+  loadMoreText: {
+    color: "#267642",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 10,
+  },
+  toolkitSection: { marginTop: 4 },
+  resourcesLoading: { alignItems: "center", paddingVertical: 20 },
+  resourcesEmpty: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E0E9E1",
+    borderRadius: 15,
+    borderWidth: 1,
+    marginTop: 12,
+    padding: 18,
+  },
+  resourceCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E0E9E1",
+    borderRadius: 15,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 10,
+    padding: 12,
+  },
+  resourceIcon: {
+    alignItems: "center",
+    backgroundColor: "#EEF7F0",
+    borderRadius: 11,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  resourceCopy: { flex: 1, gap: 3 },
+  resourceCategory: {
+    color: "#438451",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 8,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  resourceTitle: {
+    color: "#304936",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  resourceReadTime: {
+    color: "#7B897E",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 8,
+  },
+  footerNote: {
+    color: "#8A968D",
+    fontFamily: "Righteous_400Regular",
+    fontSize: 8,
+    lineHeight: 12,
+    marginTop: 18,
+    textAlign: "center",
+  },
 });
