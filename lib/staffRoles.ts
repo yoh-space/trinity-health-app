@@ -1,6 +1,7 @@
 import type { Href } from "expo-router";
 
 export type StaffRoleId = "counselor" | "clinician" | "admin";
+export type StaffTabId = "home" | "requests" | "team";
 
 export type StaffRole = {
   id: StaffRoleId;
@@ -49,3 +50,24 @@ export const staffDashboardPath = (role: StaffRoleId): Href =>
     : role === "counselor"
       ? ("/staff/counselor" as Href)
       : ("/staff/admin" as Href);
+
+const staffTabPaths: Record<StaffRoleId, Record<StaffTabId, string>> = {
+  counselor: {
+    home: "/staff/counselor",
+    requests: "/staff/counselor-requests",
+    team: "/staff/counselor-team",
+  },
+  clinician: {
+    home: "/staff/clinical",
+    requests: "/staff/clinical-requests",
+    team: "/staff/clinical-team",
+  },
+  admin: {
+    home: "/staff/admin",
+    requests: "/staff/admin-requests",
+    team: "/staff/admin-team",
+  },
+};
+
+export const staffTabPath = (role: StaffRoleId, tab: StaffTabId): Href =>
+  staffTabPaths[role][tab] as Href;

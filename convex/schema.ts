@@ -81,7 +81,14 @@ export default defineSchema({
   })
     .index("by_userId_createdAt", ["userId", "createdAt"])
     .index("by_status_createdAt", ["status", "createdAt"])
-    .index("by_type_status_createdAt", ["requestType", "status", "createdAt"]),
+    .index("by_type_status_createdAt", ["requestType", "status", "createdAt"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_type_createdAt", ["requestType", "createdAt"])
+    .index("by_assignedTo_status_createdAt", [
+      "assignedTo",
+      "status",
+      "createdAt",
+    ]),
   careRequestEvents: defineTable({
     requestId: v.id("careRequests"),
     actorUserId: v.string(),
@@ -89,11 +96,16 @@ export default defineSchema({
       v.literal("user"),
       v.literal("clinical"),
       v.literal("counselor"),
+      v.literal("admin"),
     ),
     action: v.union(
       v.literal("submitted"),
       v.literal("statusChanged"),
       v.literal("assigned"),
+      v.literal("appointmentScheduled"),
+      v.literal("appointmentRescheduled"),
+      v.literal("appointmentCancelled"),
+      v.literal("appointmentCompleted"),
     ),
     fromStatus: v.optional(
       v.union(
@@ -111,4 +123,49 @@ export default defineSchema({
     ),
     createdAt: v.number(),
   }).index("by_requestId_createdAt", ["requestId", "createdAt"]),
+  staffProfiles: defineTable({
+    clerkUserId: v.string(),
+    role: v.union(
+      v.literal("counselor"),
+      v.literal("clinician"),
+      v.literal("admin"),
+    ),
+    displayName: v.string(),
+    specialty: v.string(),
+    availability: v.union(v.literal("available"), v.literal("away")),
+    active: v.boolean(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_clerkUserId", ["clerkUserId"])
+    .index("by_active_updatedAt", ["active", "updatedAt"])
+    .index("by_updatedAt", ["updatedAt"]),
+  careAppointments: defineTable({
+    requestId: v.id("careRequests"),
+    staffUserId: v.string(),
+    scheduledAt: v.number(),
+    durationMinutes: v.number(),
+    format: v.union(v.literal("online"), v.literal("inPerson")),
+    status: v.union(
+      v.literal("scheduled"),
+      v.literal("completed"),
+      v.literal("cancelled"),
+    ),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_staffUserId_status_scheduledAt", [
+      "staffUserId",
+      "status",
+      "scheduledAt",
+    ])
+    .index("by_requestId_scheduledAt", ["requestId", "scheduledAt"])
+    .index("by_requestId_status_scheduledAt", [
+      "requestId",
+      "status",
+      "scheduledAt",
+    ])
+    .index("by_status_scheduledAt", ["status", "scheduledAt"]),
 });

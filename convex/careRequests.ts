@@ -4,9 +4,14 @@ import {
   paginationResultValidator,
 } from "convex/server";
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import { type Doc, type Id } from "./_generated/dataModel";
-import { getIdentityForRole, requireRole } from "./auth";
+import { getActiveStaffIdentity, requireActiveStaff } from "./auth";
 
 const requestTypeValidator = v.union(
   v.literal("clinical"),
@@ -19,10 +24,17 @@ const requestStatusValidator = v.union(
   v.literal("contacted"),
   v.literal("closed"),
 );
-const activeRequestStatusValidator = v.union(
+const adminQueueStatusValidator = v.union(
+  v.literal("all"),
   v.literal("submitted"),
   v.literal("inReview"),
   v.literal("contacted"),
+  v.literal("closed"),
+);
+const adminQueueTypeValidator = v.union(
+  v.literal("all"),
+  v.literal("clinical"),
+  v.literal("counselling"),
 );
 const staffUpdateStatusValidator = v.union(
   v.literal("inReview"),
@@ -51,7 +63,7 @@ const clinicalQueueItemValidator = v.object({
   contactDetails: v.string(),
   requestSummary: v.optional(v.string()),
   assignedAt: v.optional(v.number()),
-  status: activeRequestStatusValidator,
+  status: requestStatusValidator,
   consentedAt: v.number(),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -67,7 +79,7 @@ const counselorQueueItemValidator = v.object({
   contactDetails: v.string(),
   requestSummary: v.optional(v.string()),
   assignedAt: v.optional(v.number()),
-  status: activeRequestStatusValidator,
+  status: requestStatusValidator,
   consentedAt: v.number(),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -91,31 +103,56 @@ const adminRecentRequestValidator = v.object({
   createdAt: v.number(),
   assigned: v.boolean(),
 });
+const adminQueueItemValidator = v.object({
+  _id: v.id("careRequests"),
+  _creationTime: v.number(),
+  requestType: requestTypeValidator,
+  contactMethod: contactMethodValidator,
+  contactDetails: v.string(),
+  requestSummary: v.optional(v.string()),
+  status: requestStatusValidator,
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  assignedToProfileId: v.optional(v.id("staffProfiles")),
+  assignedToName: v.optional(v.string()),
+});
 
 type StaffRequestType = "clinical" | "counselling";
 type StaffActorRole = "clinical" | "counselor";
 type StaffUpdateStatus = "inReview" | "contacted" | "closed";
-type ActiveRequestStatus = "submitted" | "inReview" | "contacted";
+type RequestStatus = "submitted" | "inReview" | "contacted" | "closed";
 
 const adminRequestTypes = ["clinical", "counselling"] as const;
 const adminRequestStatuses = ["submitted", "inReview", "contacted", "closed"] as const;
 
-async function getClinicalStaffId(ctx: { auth: Auth }) {
-  const identity = await getIdentityForRole(ctx, "clinician");
+async function getClinicalStaffId(ctx: {
+  auth: Auth;
+  db: QueryCtx["db"];
+}) {
+  const identity = await getActiveStaffIdentity(ctx, "clinician");
   return identity?.subject ?? null;
 }
 
-async function getCounselorStaffId(ctx: { auth: Auth }) {
-  const identity = await getIdentityForRole(ctx, "counselor");
+async function getCounselorStaffId(ctx: {
+  auth: Auth;
+  db: QueryCtx["db"];
+}) {
+  const identity = await getActiveStaffIdentity(ctx, "counselor");
   return identity?.subject ?? null;
 }
 
-async function requireClinicalStaff(ctx: { auth: Auth }) {
-  return (await requireRole(ctx, "clinician")).subject;
+async function requireClinicalStaff(ctx: {
+  auth: Auth;
+  db: QueryCtx["db"];
+}) {
+  return (await requireActiveStaff(ctx, "clinician")).subject;
 }
 
-async function requireCounselorStaff(ctx: { auth: Auth }) {
-  return (await requireRole(ctx, "counselor")).subject;
+async function requireCounselorStaff(ctx: {
+  auth: Auth;
+  db: QueryCtx["db"];
+}) {
+  return (await requireActiveStaff(ctx, "counselor")).subject;
 }
 
 async function requireUserId({ auth }: { auth: Auth }) {
@@ -267,7 +304,7 @@ export const listClinicalQueue = query({
         ({ userId, assignedTo, ...request }) => ({
           ...request,
           requestType: "clinical" as const,
-          status: request.status as ActiveRequestStatus,
+          status: request.status as RequestStatus,
           assignedToMe: assignedTo === staffId,
           assignedElsewhere: Boolean(assignedTo && assignedTo !== staffId),
         }),
@@ -288,10 +325,11 @@ export const getClinicalQueueCounts = query({
     submitted: clinicalQueueCountsValidator,
     inReview: clinicalQueueCountsValidator,
     contacted: clinicalQueueCountsValidator,
+    closed: clinicalQueueCountsValidator,
   }),
   handler: async (ctx) => {
-    await requireRole(ctx, "clinician");
-    const statuses = ["submitted", "inReview", "contacted"] as const;
+    await requireClinicalStaff(ctx);
+    const statuses = ["submitted", "inReview", "contacted", "closed"] as const;
     const rows = await Promise.all(
       statuses.map((status) =>
         ctx.db
@@ -308,13 +346,14 @@ export const getClinicalQueueCounts = query({
       submitted: count(rows[0]),
       inReview: count(rows[1]),
       contacted: count(rows[2]),
+      closed: count(rows[3]),
     };
   },
 });
 
 export const listClinicalQueuePage = query({
   args: {
-    status: activeRequestStatusValidator,
+    status: requestStatusValidator,
     paginationOpts: paginationOptsValidator,
   },
   returns: paginationResultValidator(clinicalQueueItemValidator),
@@ -375,10 +414,11 @@ export const getCounselorQueueCounts = query({
     submitted: counselorQueueCountsValidator,
     inReview: counselorQueueCountsValidator,
     contacted: counselorQueueCountsValidator,
+    closed: counselorQueueCountsValidator,
   }),
   handler: async (ctx) => {
     await requireCounselorStaff(ctx);
-    const statuses = ["submitted", "inReview", "contacted"] as const;
+    const statuses = ["submitted", "inReview", "contacted", "closed"] as const;
     const rows = await Promise.all(
       statuses.map((status) =>
         ctx.db
@@ -395,13 +435,14 @@ export const getCounselorQueueCounts = query({
       submitted: count(rows[0]),
       inReview: count(rows[1]),
       contacted: count(rows[2]),
+      closed: count(rows[3]),
     };
   },
 });
 
 export const listCounselorQueue = query({
   args: {
-    status: activeRequestStatusValidator,
+    status: requestStatusValidator,
     paginationOpts: paginationOptsValidator,
   },
   returns: paginationResultValidator(counselorQueueItemValidator),
@@ -456,7 +497,7 @@ export const getAdminDashboardOverview = query({
     recentRequests: v.array(adminRecentRequestValidator),
   }),
   handler: async (ctx) => {
-    await requireRole(ctx, "admin");
+    await requireActiveStaff(ctx, "admin");
 
     const buckets = await Promise.all(
       adminRequestTypes.flatMap((requestType) =>
@@ -522,6 +563,170 @@ export const getAdminDashboardOverview = query({
   },
 });
 
+export const listAdminQueuePage = query({
+  args: {
+    requestType: adminQueueTypeValidator,
+    status: adminQueueStatusValidator,
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(adminQueueItemValidator),
+  handler: async (ctx, args) => {
+    await requireActiveStaff(ctx, "admin");
+    const requestType = args.requestType === "all" ? null : args.requestType;
+    const status = args.status === "all" ? null : args.status;
+
+    const page = await (async () => {
+      if (requestType && status) {
+        return await ctx.db
+          .query("careRequests")
+          .withIndex("by_type_status_createdAt", (q) =>
+            q.eq("requestType", requestType).eq("status", status),
+          )
+          .order("desc")
+          .paginate(args.paginationOpts);
+      }
+      if (requestType) {
+        return await ctx.db
+          .query("careRequests")
+          .withIndex("by_type_createdAt", (q) =>
+            q.eq("requestType", requestType),
+          )
+          .order("desc")
+          .paginate(args.paginationOpts);
+      }
+      if (status) {
+        return await ctx.db
+          .query("careRequests")
+          .withIndex("by_status_createdAt", (q) =>
+            q.eq("status", status),
+          )
+          .order("desc")
+          .paginate(args.paginationOpts);
+      }
+      return await ctx.db
+        .query("careRequests")
+        .withIndex("by_createdAt")
+        .order("desc")
+        .paginate(args.paginationOpts);
+    })();
+
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async ({ userId, assignedTo, ...request }) => {
+          const assignedProfile = assignedTo
+            ? await ctx.db
+                .query("staffProfiles")
+                .withIndex("by_clerkUserId", (q) =>
+                  q.eq("clerkUserId", assignedTo),
+                )
+                .unique()
+            : null;
+          return {
+            ...request,
+            ...(assignedProfile
+              ? {
+                  assignedToProfileId: assignedProfile._id,
+                  assignedToName: assignedProfile.displayName,
+                }
+              : {}),
+          };
+        }),
+      ),
+    };
+  },
+});
+
+export const assignAdminRequest = mutation({
+  args: {
+    requestId: v.id("careRequests"),
+    staffProfileId: v.union(v.id("staffProfiles"), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, { requestId, staffProfileId }) => {
+    const admin = await requireActiveStaff(ctx, "admin");
+    const request = await ctx.db.get(requestId);
+    if (!request) throw new Error("This request no longer exists.");
+    if (request.status === "closed") {
+      throw new Error("Closed requests cannot be assigned.");
+    }
+
+    const scheduledAppointments = await ctx.db
+      .query("careAppointments")
+      .withIndex("by_requestId_status_scheduledAt", (q) =>
+        q.eq("requestId", requestId).eq("status", "scheduled"),
+      )
+      .take(1);
+
+    const profile = staffProfileId ? await ctx.db.get(staffProfileId) : null;
+    if (staffProfileId && !profile) {
+      throw new Error("This staff profile no longer exists.");
+    }
+    if (profile) {
+      if (!profile.active) {
+        throw new Error("Choose an active staff member.");
+      }
+      const requiredRole =
+        request.requestType === "clinical" ? "clinician" : "counselor";
+      if (profile.role !== requiredRole) {
+        throw new Error(
+          `Choose a ${requiredRole === "clinician" ? "clinician" : "counselor"} for this request.`,
+        );
+      }
+      if (
+        scheduledAppointments[0] &&
+        scheduledAppointments[0].staffUserId !== profile.clerkUserId
+      ) {
+        throw new Error(
+          "Cancel or complete the existing session before reassigning this request.",
+        );
+      }
+
+      const now = Date.now();
+      await ctx.db.patch(requestId, {
+        assignedTo: profile.clerkUserId,
+        assignedAt: now,
+        status: "inReview",
+        updatedAt: now,
+      });
+      await ctx.db.insert("careRequestEvents", {
+        requestId,
+        actorUserId: admin.subject,
+        actorRole: "admin",
+        action: "assigned",
+        fromStatus: request.status,
+        toStatus: "inReview",
+        createdAt: now,
+      });
+      return null;
+    }
+
+    if (scheduledAppointments.length > 0) {
+      throw new Error(
+        "Cancel or complete the scheduled session before returning this request to the unassigned queue.",
+      );
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(requestId, {
+      assignedTo: undefined,
+      assignedAt: undefined,
+      status: "submitted",
+      updatedAt: now,
+    });
+    await ctx.db.insert("careRequestEvents", {
+      requestId,
+      actorUserId: admin.subject,
+      actorRole: "admin",
+      action: "statusChanged",
+      fromStatus: request.status,
+      toStatus: "submitted",
+      createdAt: now,
+    });
+    return null;
+  },
+});
+
 async function updateStaffRequestStatus(
   ctx: MutationCtx,
   {
@@ -564,6 +769,20 @@ async function updateStaffRequestStatus(
     };
     if (!allowedTransitions[request.status]?.includes(status)) {
       throw new Error("That status transition is not allowed.");
+    }
+  }
+
+  if (status === "closed") {
+    const scheduledAppointment = await ctx.db
+      .query("careAppointments")
+      .withIndex("by_requestId_status_scheduledAt", (q) =>
+        q.eq("requestId", requestId).eq("status", "scheduled"),
+      )
+      .take(1);
+    if (scheduledAppointment.length > 0) {
+      throw new Error(
+        "Complete or cancel the scheduled session before closing this request.",
+      );
     }
   }
 
