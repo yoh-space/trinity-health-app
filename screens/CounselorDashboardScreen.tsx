@@ -19,7 +19,6 @@ import {
   type StaffRequestUpdateStatus,
 } from "../components/staff/CareRequestCard";
 import {
-  StaffAccessState,
   StaffMetricCard,
   StaffQueueFilterButton,
 } from "../components/staff/StaffDashboardPrimitives";
@@ -44,26 +43,22 @@ export default function CounselorDashboardScreen() {
   const [filter, setFilter] = useState<QueueFilter>("submitted");
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const authorized = useQuery(
-    api.careRequests.getCounselorAccess,
-    staffAccountState === "ready" ? {} : "skip",
-  );
   const counts = useQuery(
     api.careRequests.getCounselorQueueCounts,
-    authorized === true ? {} : "skip",
+    staffAccountState === "ready" ? {} : "skip",
   );
   const queue = usePaginatedQuery(
     api.careRequests.listCounselorQueue,
-    authorized === true ? { status: filter } : "skip",
+    staffAccountState === "ready" ? { status: filter } : "skip",
     { initialNumItems: 20 },
   );
   const resources = useQuery(
     api.education.listPublished,
-    authorized === true ? {} : "skip",
+    staffAccountState === "ready" ? {} : "skip",
   );
   const appointments = useQuery(
     api.appointments.listMyAppointments,
-    authorized === true ? {} : "skip",
+    staffAccountState === "ready" ? {} : "skip",
   );
   const updateStatus = useMutation(api.careRequests.updateCounselorStatus);
 
@@ -106,22 +101,6 @@ export default function CounselorDashboardScreen() {
         state={staffAccountState}
         role="counselor"
         initialName={user?.fullName ?? ""}
-      />
-    );
-  }
-
-  if (authorized === undefined) {
-    return <StaffAccessState loading title="Checking counselor access…" body="" />;
-  }
-
-  if (!authorized) {
-    return (
-      <StaffAccessState
-        icon="shield-checkmark-outline"
-        title="Counselor access not enabled"
-        body="This account is not authorized to view counselling requests. Contact your platform administrator if you believe this is an error."
-        actionLabel="Back to staff portal"
-        onAction={() => router.replace("/staff-portal" as Href)}
       />
     );
   }

@@ -220,6 +220,17 @@ export function StaffAccountStateScreen({
       />
     );
   }
+  if (state === "accessDenied") {
+    return (
+      <StaffAccessState
+        icon="shield-checkmark-outline"
+        title="Staff access could not be verified"
+        body="Your Convex token role does not match your active staff profile. Ask an administrator to check the Clerk role and Convex JWT template."
+        actionLabel="Back to staff portal"
+        onAction={() => router.replace("/staff-portal" as Href)}
+      />
+    );
+  }
   return (
     <StaffAccessState
       icon="shield-checkmark-outline"

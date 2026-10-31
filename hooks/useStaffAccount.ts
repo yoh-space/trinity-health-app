@@ -1,6 +1,4 @@
-import { useAuth, useUser } from "@clerk/expo";
-import { useQuery } from "convex/react";
-import { api } from "../convex/_generated/api";
+import { useStaffAccountContext } from "../components/staff/StaffAccountProvider";
 import type { StaffRoleId } from "../lib/staffRoles";
 
 export type StaffAccountState =
@@ -9,16 +7,18 @@ export type StaffAccountState =
   | "wrongRole"
   | "profileMissing"
   | "profileInactive"
+  | "accessDenied"
   | "ready";
 
 export function useStaffAccount(role: StaffRoleId) {
-  const { isLoaded, isSignedIn } = useAuth();
-  const { isLoaded: isUserLoaded, user } = useUser();
+  const {
+    authLoaded: isLoaded,
+    signedIn: isSignedIn,
+    userLoaded: isUserLoaded,
+    user,
+    profile,
+  } = useStaffAccountContext();
   const hasExpectedRole = user?.publicMetadata.role === role;
-  const profile = useQuery(
-    api.staff.getMyProfile,
-    isLoaded && isSignedIn && isUserLoaded ? {} : "skip",
-  );
 
   let state: StaffAccountState = "loading";
   if (isLoaded && !isSignedIn) state = "signedOut";
@@ -36,7 +36,21 @@ export function useStaffAccount(role: StaffRoleId) {
     (profile.role !== role || !profile.active)
   ) {
     state = "profileInactive";
-  } else if (isLoaded && isSignedIn && isUserLoaded && profile?.active) {
+  } else if (
+    isLoaded &&
+    isSignedIn &&
+    isUserLoaded &&
+    profile &&
+    !profile.authorized
+  ) {
+    state = "accessDenied";
+  } else if (
+    isLoaded &&
+    isSignedIn &&
+    isUserLoaded &&
+    profile?.active &&
+    profile.authorized
+  ) {
     state = "ready";
   }
 
