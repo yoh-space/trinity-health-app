@@ -3,7 +3,11 @@ import { type Id } from "../../convex/_generated/dataModel";
 import { StyleSheet, Text, View } from "react-native";
 import { StaffActionButton } from "./StaffDashboardPrimitives";
 
-export type StaffRequestStatus = "submitted" | "inReview" | "contacted";
+export type StaffRequestStatus =
+  | "submitted"
+  | "inReview"
+  | "contacted"
+  | "closed";
 export type StaffRequestUpdateStatus = "inReview" | "contacted" | "closed";
 
 export type StaffQueueRequest = {
@@ -24,12 +28,14 @@ export function CareRequestCard({
   busy,
   onUpdateStatus,
   onCloseRequest,
+  onScheduleAppointment,
 }: {
   request: StaffQueueRequest;
   staffRole: "clinical" | "counselor";
   busy: boolean;
   onUpdateStatus: (status: StaffRequestUpdateStatus) => void;
   onCloseRequest: () => void;
+  onScheduleAppointment?: () => void;
 }) {
   const label = staffRole === "clinical" ? "Clinical" : "Counselling";
   const icon = staffRole === "clinical" ? "medkit-outline" : "heart-outline";
@@ -48,7 +54,9 @@ export function CareRequestCard({
             ? "New"
             : request.status === "inReview"
               ? "In review"
-              : "Contacted"}
+              : request.status === "contacted"
+                ? "Contacted"
+                : "Closed"}
         </Text>
       </View>
 
@@ -93,6 +101,11 @@ export function CareRequestCard({
             {assignedCopy} has claimed this request.
           </Text>
         </View>
+      ) : request.status === "closed" ? (
+        <View style={styles.assignmentNotice}>
+          <Ionicons name="checkmark-done-outline" size={14} color="#4D7A59" />
+          <Text style={styles.closedText}>This request is closed.</Text>
+        </View>
       ) : (
         <View style={styles.actions}>
           {request.status === "submitted" ? (
@@ -132,6 +145,17 @@ export function CareRequestCard({
               </Text>
             </View>
           )}
+          {request.assignedToMe &&
+          (request.status === "inReview" || request.status === "contacted") &&
+          onScheduleAppointment ? (
+            <StaffActionButton
+              label="Sessions"
+              icon="calendar-outline"
+              secondary
+              disabled={busy}
+              onPress={onScheduleAppointment}
+            />
+          ) : null}
         </View>
       )}
     </View>
@@ -155,5 +179,6 @@ const styles = StyleSheet.create({
   contactValue: { color: "#2E4936", fontFamily: "Righteous_400Regular", fontSize: 10 },
   assignmentNotice: { alignItems: "center", backgroundColor: "#FFF7E8", borderRadius: 9, flexDirection: "row", gap: 7, marginTop: 11, padding: 9 },
   assignmentText: { color: "#73591F", flex: 1, fontFamily: "Righteous_400Regular", fontSize: 8 },
+  closedText: { color: "#4E7057", flex: 1, fontFamily: "Righteous_400Regular", fontSize: 8 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 12 },
 });
