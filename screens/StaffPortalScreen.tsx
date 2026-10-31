@@ -3,7 +3,7 @@ import { useSignIn, useSignUp, useSSO } from "@clerk/expo";
 import { useRouter, type Href } from "expo-router";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -18,6 +18,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import GoogleIcon from "../components/icons/GoogleIcon";
+import { useStaffPortalVisibility } from "../hooks/useStaffPortalVisibility";
+import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
 import {
   staffDashboardPath,
   staffRoles,
@@ -73,6 +75,11 @@ function isCancelError(error: unknown) {
 
 export default function StaffPortalScreen() {
   const router = useRouter();
+  const {
+    isReady: authReady,
+    isSignedIn,
+    staffRole,
+  } = useStaffPortalVisibility();
   const { signIn, fetchStatus: signInFetchStatus } = useSignIn();
   const { signUp, fetchStatus: signUpFetchStatus } = useSignUp();
   const { startSSOFlow } = useSSO();
@@ -88,6 +95,15 @@ export default function StaffPortalScreen() {
     localLoading ||
     signInFetchStatus === "fetching" ||
     signUpFetchStatus === "fetching";
+
+  useEffect(() => {
+    if (!authReady || !isSignedIn) return;
+
+    const destination = staffRole
+      ? staffDashboardPath(staffRole)
+      : AUTHENTICATED_HOME_TABS;
+    router.replace(destination as Href);
+  }, [authReady, isSignedIn, router, staffRole]);
 
   const startSignUp = async (emailAddress: string) => {
     if (!signUp) {
@@ -305,6 +321,19 @@ export default function StaffPortalScreen() {
     }
   };
 
+  if (!authReady || isSignedIn) {
+    return (
+      <SafeAreaView edges={["top", "left", "right", "bottom"]} style={styles.safeArea}>
+        <View style={styles.redirectState}>
+          <ActivityIndicator color="#16803F" />
+          <Text style={styles.redirectText}>
+            {isSignedIn ? "Restoring your staff session…" : "Checking your session…"}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView edges={["top", "left", "right", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -512,6 +541,8 @@ export default function StaffPortalScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: "#FFFFFF", flex: 1 },
+  redirectState: { alignItems: "center", flex: 1, gap: 10, justifyContent: "center" },
+  redirectText: { color: "#586B5F", fontSize: 13 },
   keyboardView: { flex: 1 },
   content: {
     alignSelf: "center",

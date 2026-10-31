@@ -3,6 +3,10 @@ import type { Href } from "expo-router";
 export type StaffRoleId = "counselor" | "clinician" | "admin";
 export type StaffTabId = "home" | "requests" | "team";
 
+export function isStaffRoleId(value: unknown): value is StaffRoleId {
+  return value === "counselor" || value === "clinician" || value === "admin";
+}
+
 export type StaffRole = {
   id: StaffRoleId;
   label: string;

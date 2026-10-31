@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { api } from "../convex/_generated/api";
 import { AUTHENTICATED_PROFILE_TAB } from "../constants/authRoutes";
+import { isStaffRoleId } from "../lib/staffRoles";
 import {
   hasSavedOnboardingProfile,
   ONBOARDING_PROFILE_KEY,
@@ -475,15 +476,17 @@ export default function ProfileSettingsScreen() {
           </View>
         </View>
 
-        <View style={styles.section}>
-          <SectionHeading title={text.more} />
-          <ActionRow
-            icon="briefcase-outline"
-            title={text.staffPortal}
-            subtitle={text.staffPortalHint}
-            onPress={() => router.push("/staff-portal" as Href)}
-          />
-        </View>
+        {authReady && (!isSignedIn || isStaffRoleId(user?.publicMetadata.role)) ? (
+          <View style={styles.section}>
+            <SectionHeading title={text.more} />
+            <ActionRow
+              icon="briefcase-outline"
+              title={text.staffPortal}
+              subtitle={text.staffPortalHint}
+              onPress={() => router.push("/staff-portal" as Href)}
+            />
+          </View>
+        ) : null}
 
         <View style={styles.footer}>
           <Image

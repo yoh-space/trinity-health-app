@@ -3,11 +3,13 @@ import { useRouter, type Href } from "expo-router";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { PatternDivider } from "./PatternDivider";
 import { storyCopy } from "./welcomeCopy";
+import { useStaffPortalVisibility } from "../../hooks/useStaffPortalVisibility";
 
 const commitmentIcons = ["leaf-outline", "book-outline", "shield-checkmark-outline"] as const;
 
 export function WelcomeStoryPanel() {
   const router = useRouter();
+  const { showStaffPortal } = useStaffPortalVisibility();
 
   return (
     <View style={styles.panel}>
@@ -50,15 +52,17 @@ export function WelcomeStoryPanel() {
       </View>
 
       <View style={styles.footer}>
-        <Pressable
-          accessibilityRole="link"
-          onPress={() => router.push("/staff-portal" as Href)}
-          style={styles.portalButton}
-        >
-          <Ionicons name="shield-checkmark-outline" size={15} color="#275D37" />
-          <Text style={styles.portalText}>{storyCopy.portal}</Text>
-          <Ionicons name="arrow-up-outline" size={14} color="#275D37" />
-        </Pressable>
+        {showStaffPortal ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push("/staff-portal" as Href)}
+            style={styles.portalButton}
+          >
+            <Ionicons name="shield-checkmark-outline" size={15} color="#275D37" />
+            <Text style={styles.portalText}>{storyCopy.portal}</Text>
+            <Ionicons name="arrow-up-outline" size={14} color="#275D37" />
+          </Pressable>
+        ) : null}
         <Text style={styles.amharicNote}>{storyCopy.amharicNote}</Text>
         <Text style={styles.englishNote}>{storyCopy.englishNote}</Text>
       </View>

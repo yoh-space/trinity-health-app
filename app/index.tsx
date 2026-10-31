@@ -1,8 +1,9 @@
-import { useAuth } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { Redirect, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { AUTHENTICATED_HOME_TABS } from "../constants/authRoutes";
+import { isStaffRoleId, staffDashboardPath } from "../lib/staffRoles";
 import WelcomeScreen from "../screens/WelcomeScreen";
 
 const welcomeSeenKey = "trinity-welcome-seen";
@@ -32,6 +33,7 @@ const markWelcomeSeen = async () => {
 
 export default function IndexScreen() {
   const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded: userLoaded, user } = useUser();
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -63,10 +65,13 @@ export default function IndexScreen() {
 
   if (showWelcome === null) return null;
   if (showWelcome) return <WelcomeScreen />;
-  if (!isLoaded) return null;
+  if (!isLoaded || (isSignedIn && !userLoaded)) return null;
 
+  const roleClaim = user?.publicMetadata.role;
   const destination = isSignedIn
-    ? AUTHENTICATED_HOME_TABS
+    ? isStaffRoleId(roleClaim)
+      ? staffDashboardPath(roleClaim)
+      : AUTHENTICATED_HOME_TABS
     : "/public/home";
 
   return <Redirect href={destination as Href} />;
