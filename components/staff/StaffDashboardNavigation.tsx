@@ -225,7 +225,7 @@ export function StaffAccountStateScreen({
       <StaffAccessState
         icon="shield-checkmark-outline"
         title="Staff access could not be verified"
-        body="Your Convex token role does not match your active staff profile. Ask an administrator to check the Clerk role and Convex JWT template."
+        body="Convex could not verify this staff session. Check the Clerk role and Convex JWT template, then try again."
         actionLabel="Back to staff portal"
         onAction={() => router.replace("/staff-portal" as Href)}
       />

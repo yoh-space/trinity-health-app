@@ -613,7 +613,8 @@ export const listAdminQueuePage = query({
     return {
       ...page,
       page: await Promise.all(
-        page.page.map(async ({ userId, assignedTo, ...request }) => {
+        page.page.map(async (request) => {
+          const assignedTo = request.assignedTo;
           const assignedProfile = assignedTo
             ? await ctx.db
                 .query("staffProfiles")
@@ -623,7 +624,17 @@ export const listAdminQueuePage = query({
                 .unique()
             : null;
           return {
-            ...request,
+            _id: request._id,
+            _creationTime: request._creationTime,
+            requestType: request.requestType,
+            contactMethod: request.contactMethod,
+            contactDetails: request.contactDetails,
+            ...(request.requestSummary
+              ? { requestSummary: request.requestSummary }
+              : {}),
+            status: request.status,
+            createdAt: request.createdAt,
+            updatedAt: request.updatedAt,
             ...(assignedProfile
               ? {
                   assignedToProfileId: assignedProfile._id,

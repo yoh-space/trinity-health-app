@@ -15,6 +15,8 @@ export function useStaffAccount(role: StaffRoleId) {
     authLoaded: isLoaded,
     signedIn: isSignedIn,
     userLoaded: isUserLoaded,
+    convexAuthLoading,
+    convexAuthenticated,
     user,
     profile,
   } = useStaffAccountContext();
@@ -24,6 +26,20 @@ export function useStaffAccount(role: StaffRoleId) {
   if (isLoaded && !isSignedIn) state = "signedOut";
   else if (isLoaded && isSignedIn && isUserLoaded && !hasExpectedRole) {
     state = "wrongRole";
+  } else if (
+    isLoaded &&
+    isSignedIn &&
+    isUserLoaded &&
+    convexAuthLoading
+  ) {
+    state = "loading";
+  } else if (
+    isLoaded &&
+    isSignedIn &&
+    isUserLoaded &&
+    !convexAuthenticated
+  ) {
+    state = "accessDenied";
   } else if (isLoaded && isSignedIn && isUserLoaded && profile === undefined) {
     state = "loading";
   } else if (isLoaded && isSignedIn && isUserLoaded && profile === null) {
