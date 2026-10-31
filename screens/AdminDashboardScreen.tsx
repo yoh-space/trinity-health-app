@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth, useUser } from "@clerk/expo";
-import { useQuery } from "convex/react";
-import { useRouter, type Href } from "expo-router";
+import { usePaginatedQuery, useQuery } from "convex/react";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,12 @@ import {
   StaffAccessState,
   StaffMetricCard,
 } from "../components/staff/StaffDashboardPrimitives";
+import {
+  StaffAccountStateScreen,
+  StaffBottomNavigation,
+} from "../components/staff/StaffDashboardNavigation";
+import { useStaffAccount } from "../hooks/useStaffAccount";
+import { staffTabPath } from "../lib/staffRoles";
 
 type RequestStatus = "submitted" | "inReview" | "contacted" | "closed";
 type CountValue = number | "100+";
@@ -51,48 +56,28 @@ function formatStatus(status: RequestStatus) {
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
-  const { isLoaded, isSignedIn, signOut } = useAuth();
-  const { isLoaded: isUserLoaded, user } = useUser();
-  const hasAdminRole = user?.publicMetadata.role === "admin";
+  const [now] = useState(() => Date.now());
+  const { state: staffAccountState, user, profile } = useStaffAccount("admin");
   const overview = useQuery(
     api.careRequests.getAdminDashboardOverview,
-    isLoaded && isSignedIn && isUserLoaded && hasAdminRole ? {} : "skip",
+    staffAccountState === "ready" ? {} : "skip",
+  );
+  const team = usePaginatedQuery(
+    api.staff.listTeamMembers,
+    staffAccountState === "ready" ? { includeInactive: false } : "skip",
+    { initialNumItems: 5 },
+  );
+  const appointments = useQuery(
+    api.appointments.listUpcomingForAdmin,
+    staffAccountState === "ready" ? { now } : "skip",
   );
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace("/staff-portal" as Href);
-    } catch (error) {
-      console.error("Admin sign-out failed.", error);
-      Alert.alert("Could not sign out", "Please try again.");
-    }
-  };
-
-  if (!isLoaded || (isSignedIn && !isUserLoaded)) {
-    return <StaffAccessState loading title="Loading staff access…" body="" />;
-  }
-
-  if (!isSignedIn) {
+  if (staffAccountState !== "ready") {
     return (
-      <StaffAccessState
-        icon="lock-closed-outline"
-        title="Sign in required"
-        body="The admin overview is available only to authenticated, authorized staff."
-        actionLabel="Open staff sign-in"
-        onAction={() => router.replace("/staff-portal" as Href)}
-      />
-    );
-  }
-
-  if (!hasAdminRole) {
-    return (
-      <StaffAccessState
-        icon="shield-checkmark-outline"
-        title="Access denied"
-        body="You are signed in, but this account does not have administrator access. Contact your platform administrator if you believe this is an error."
-        actionLabel="Back to staff portal"
-        onAction={() => router.replace("/staff-portal" as Href)}
+      <StaffAccountStateScreen
+        state={staffAccountState}
+        role="admin"
+        initialName={user?.fullName ?? ""}
       />
     );
   }
@@ -101,7 +86,7 @@ export default function AdminDashboardScreen() {
     return <StaffAccessState loading title="Loading service overview…" body="" />;
   }
 
-  const displayName = user?.firstName?.trim() || "Administrator";
+  const displayName = profile?.displayName.trim().split(/\s+/)[0] || user?.firstName?.trim() || "Administrator";
   const clinical = overview.counts.clinical as RequestCounts;
   const counselling = overview.counts.counselling as RequestCounts;
   const counts = {
@@ -123,14 +108,6 @@ export default function AdminDashboardScreen() {
             <Text style={styles.title}>Service at a glance</Text>
             <Text style={styles.subtitle}>Welcome, {displayName}.</Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-            onPress={() => void handleSignOut()}
-            style={styles.signOutButton}
-          >
-            <Ionicons name="log-out-outline" size={18} color="#386248" />
-          </Pressable>
         </View>
 
         <View style={styles.metricsRow}>
@@ -182,6 +159,47 @@ export default function AdminDashboardScreen() {
           icon="heart-outline"
           counts={counselling}
         />
+
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionCopy}>
+            <Text style={styles.sectionTitle}>Team workload</Text>
+            <Text style={styles.sectionSubtitle}>
+              Open requests assigned to active staff
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.replace(staffTabPath("admin", "team"))}
+          >
+            <Text style={styles.textLink}>Manage</Text>
+          </Pressable>
+        </View>
+
+        {team.status === "LoadingFirstPage" ? (
+          <View style={styles.inlineLoading}>
+            <Text style={styles.inlineLoadingText}>Loading staff directory…</Text>
+          </View>
+        ) : team.results.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyBody}>No active staff profiles are registered yet.</Text>
+          </View>
+        ) : (
+          <View style={styles.workloadCard}>
+            {team.results.map((member) => (
+              <View key={member._id} style={styles.workloadRow}>
+                <View style={styles.workloadCopy}>
+                  <Text style={styles.workloadName}>{member.displayName}</Text>
+                  <Text style={styles.workloadRole}>
+                    {member.role === "clinician" ? "Clinician" : member.role === "counselor" ? "Counselor" : "Admin"}
+                    {" · "}
+                    {member.specialty}
+                  </Text>
+                </View>
+                <Text style={styles.workloadCount}>{member.openRequestCount}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.sectionHeader}>
           <View style={styles.sectionCopy}>
@@ -238,10 +256,50 @@ export default function AdminDashboardScreen() {
           </View>
         )}
 
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionCopy}>
+            <Text style={styles.sectionTitle}>Upcoming sessions</Text>
+            <Text style={styles.sectionSubtitle}>
+              Scheduled sessions from active care requests
+            </Text>
+          </View>
+        </View>
+
+        {appointments === undefined ? (
+          <View style={styles.inlineLoading}>
+            <Text style={styles.inlineLoadingText}>Loading sessions…</Text>
+          </View>
+        ) : appointments.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyBody}>No future sessions are scheduled.</Text>
+          </View>
+        ) : (
+          <View style={styles.workloadCard}>
+            {appointments.map((appointment) => (
+              <View key={appointment._id} style={styles.workloadRow}>
+                <View style={styles.workloadCopy}>
+                  <Text style={styles.workloadName}>
+                    {new Date(appointment.scheduledAt).toLocaleString()}
+                  </Text>
+                  <Text style={styles.workloadRole}>
+                    {appointment.requestType === "clinical" ? "Clinical" : "Counselling"}
+                    {" · "}
+                    {appointment.staffName}
+                    {" · "}
+                    {appointment.format === "online" ? "Online" : "In person"}
+                  </Text>
+                </View>
+                <Text style={styles.workloadCount}>{appointment.durationMinutes}m</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         <Text style={styles.footerNote}>
-          Counts above 100 are shown as “100+”. Staff workload and scheduling are not shown because no staff directory or appointment records are configured yet.
+          Workload and session details come from the staff directory and scheduled care appointments. Counts above 100 are shown as “100+”.
         </Text>
       </ScrollView>
+      <StaffBottomNavigation role="admin" selected="home" />
     </SafeAreaView>
   );
 }
@@ -304,16 +362,6 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     marginTop: 5,
   },
-  signOutButton: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#DFE8DF",
-    borderRadius: 11,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    width: 38,
-  },
   metricsRow: { flexDirection: "row", gap: 6, marginTop: 17 },
   scopeNote: {
     alignItems: "flex-start",
@@ -351,6 +399,15 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     marginTop: 4,
   },
+  textLink: { color: "#267642", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  inlineLoading: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#E0E9E1", borderRadius: 12, borderWidth: 1, justifyContent: "center", minHeight: 48, padding: 10 },
+  inlineLoadingText: { color: "#718077", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  workloadCard: { backgroundColor: "#FFFFFF", borderColor: "#E0E9E1", borderRadius: 14, borderWidth: 1, paddingHorizontal: 12 },
+  workloadRow: { alignItems: "center", borderBottomColor: "#EEF2EE", borderBottomWidth: 1, flexDirection: "row", gap: 10, justifyContent: "space-between", paddingVertical: 10 },
+  workloadCopy: { flex: 1, gap: 3 },
+  workloadName: { color: "#304936", fontFamily: "Righteous_400Regular", fontSize: 9 },
+  workloadRole: { color: "#718077", fontFamily: "Righteous_400Regular", fontSize: 8, lineHeight: 12 },
+  workloadCount: { color: "#245D37", fontFamily: "Righteous_400Regular", fontSize: 11 },
   queueCard: {
     backgroundColor: "#FFFFFF",
     borderColor: "#E0E9E1",

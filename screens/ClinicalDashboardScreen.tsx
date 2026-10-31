@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth, useUser } from "@clerk/expo";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
@@ -24,6 +23,12 @@ import {
   StaffMetricCard,
   StaffQueueFilterButton,
 } from "../components/staff/StaffDashboardPrimitives";
+import {
+  StaffAccountStateScreen,
+  StaffBottomNavigation,
+} from "../components/staff/StaffDashboardNavigation";
+import { StaffUpcomingAppointments } from "../components/staff/StaffUpcomingAppointments";
+import { useStaffAccount } from "../hooks/useStaffAccount";
 
 type QueueFilter = "submitted" | "inReview" | "contacted";
 
@@ -35,15 +40,13 @@ const filters: { status: QueueFilter; label: string }[] = [
 
 export default function ClinicalDashboardScreen() {
   const router = useRouter();
-  const { isLoaded, isSignedIn, signOut } = useAuth();
-  const { isLoaded: isUserLoaded, user } = useUser();
-  const hasClinicalRole = user?.publicMetadata.role === "clinician";
+  const { state: staffAccountState, user, profile } = useStaffAccount("clinician");
   const [filter, setFilter] = useState<QueueFilter>("submitted");
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const authorized = useQuery(
     api.careRequests.getClinicalAccess,
-    isLoaded && isSignedIn && isUserLoaded && hasClinicalRole ? {} : "skip",
+    staffAccountState === "ready" ? {} : "skip",
   );
   const counts = useQuery(
     api.careRequests.getClinicalQueueCounts,
@@ -56,6 +59,10 @@ export default function ClinicalDashboardScreen() {
   );
   const resources = useQuery(
     api.education.listPublished,
+    authorized === true ? {} : "skip",
+  );
+  const appointments = useQuery(
+    api.appointments.listMyAppointments,
     authorized === true ? {} : "skip",
   );
   const updateStatus = useMutation(api.careRequests.updateClinicalStatus);
@@ -93,40 +100,12 @@ export default function ClinicalDashboardScreen() {
     );
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace("/staff-portal" as Href);
-    } catch (error) {
-      console.error("Clinical staff sign-out failed.", error);
-      Alert.alert("Could not sign out", "Please try again.");
-    }
-  };
-
-  if (!isLoaded || (isSignedIn && !isUserLoaded)) {
-    return <StaffAccessState loading title="Loading staff access…" body="" />;
-  }
-
-  if (!isSignedIn) {
+  if (staffAccountState !== "ready") {
     return (
-      <StaffAccessState
-        icon="lock-closed-outline"
-        title="Sign in required"
-        body="Clinical requests are available only to authenticated, authorized staff."
-        actionLabel="Open staff sign-in"
-        onAction={() => router.replace("/staff-portal" as Href)}
-      />
-    );
-  }
-
-  if (!hasClinicalRole) {
-    return (
-      <StaffAccessState
-        icon="shield-checkmark-outline"
-        title="Access denied"
-        body="You are signed in, but this account does not have clinician access. Contact your administrator if you believe this is an error."
-        actionLabel="Back to staff portal"
-        onAction={() => router.replace("/staff-portal" as Href)}
+      <StaffAccountStateScreen
+        state={staffAccountState}
+        role="clinician"
+        initialName={user?.fullName ?? ""}
       />
     );
   }
@@ -147,7 +126,7 @@ export default function ClinicalDashboardScreen() {
     );
   }
 
-  const displayName = user?.firstName?.trim() || "Clinician";
+  const displayName = profile?.displayName.trim().split(/\s+/)[0] || user?.firstName?.trim() || "Clinician";
   const isLoadingQueue = queue.status === "LoadingFirstPage";
   const isLoadingMore = queue.status === "LoadingMore";
 
@@ -165,14 +144,6 @@ export default function ClinicalDashboardScreen() {
               Review clinical requests and support families with appropriate care.
             </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-            onPress={() => void handleSignOut()}
-            style={styles.signOutButton}
-          >
-            <Ionicons name="log-out-outline" size={18} color="#386248" />
-          </Pressable>
         </View>
 
         <View style={styles.metricsRow}>
@@ -192,6 +163,8 @@ export default function ClinicalDashboardScreen() {
             icon="call-outline"
           />
         </View>
+
+        <StaffUpcomingAppointments appointments={appointments} />
 
         <View style={styles.scopeNote}>
           <Ionicons name="medkit-outline" size={16} color="#4D7A59" />
@@ -332,6 +305,7 @@ export default function ClinicalDashboardScreen() {
           Clinician access is restricted by the Clerk role claim. Request content is excluded from the audit log.
         </Text>
       </ScrollView>
+      <StaffBottomNavigation role="clinician" selected="home" />
     </SafeAreaView>
   );
 }
@@ -364,16 +338,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
     marginTop: 5,
-  },
-  signOutButton: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#DFE8DF",
-    borderRadius: 11,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    width: 38,
   },
   metricsRow: { flexDirection: "row", gap: 8, marginTop: 17 },
   scopeNote: {

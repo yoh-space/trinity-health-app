@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth, useUser } from "@clerk/expo";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
@@ -24,6 +23,12 @@ import {
   StaffMetricCard,
   StaffQueueFilterButton,
 } from "../components/staff/StaffDashboardPrimitives";
+import {
+  StaffAccountStateScreen,
+  StaffBottomNavigation,
+} from "../components/staff/StaffDashboardNavigation";
+import { StaffUpcomingAppointments } from "../components/staff/StaffUpcomingAppointments";
+import { useStaffAccount } from "../hooks/useStaffAccount";
 
 type QueueFilter = "submitted" | "inReview" | "contacted";
 
@@ -35,15 +40,13 @@ const filters: { status: QueueFilter; label: string }[] = [
 
 export default function CounselorDashboardScreen() {
   const router = useRouter();
-  const { isLoaded, isSignedIn, signOut } = useAuth();
-  const { isLoaded: isUserLoaded, user } = useUser();
-  const hasCounselorRole = user?.publicMetadata.role === "counselor";
+  const { state: staffAccountState, user, profile } = useStaffAccount("counselor");
   const [filter, setFilter] = useState<QueueFilter>("submitted");
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const authorized = useQuery(
     api.careRequests.getCounselorAccess,
-    isLoaded && isSignedIn && isUserLoaded && hasCounselorRole ? {} : "skip",
+    staffAccountState === "ready" ? {} : "skip",
   );
   const counts = useQuery(
     api.careRequests.getCounselorQueueCounts,
@@ -56,6 +59,10 @@ export default function CounselorDashboardScreen() {
   );
   const resources = useQuery(
     api.education.listPublished,
+    authorized === true ? {} : "skip",
+  );
+  const appointments = useQuery(
+    api.appointments.listMyAppointments,
     authorized === true ? {} : "skip",
   );
   const updateStatus = useMutation(api.careRequests.updateCounselorStatus);
@@ -93,40 +100,12 @@ export default function CounselorDashboardScreen() {
     );
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      router.replace("/staff-portal" as Href);
-    } catch (error) {
-      console.error("Counselor sign-out failed.", error);
-      Alert.alert("Could not sign out", "Please try again.");
-    }
-  };
-
-  if (!isLoaded || (isSignedIn && !isUserLoaded)) {
-    return <StaffAccessState loading title="Loading staff access…" body="" />;
-  }
-
-  if (!isSignedIn) {
+  if (staffAccountState !== "ready") {
     return (
-      <StaffAccessState
-        icon="lock-closed-outline"
-        title="Sign in required"
-        body="Counselling requests are available only to authenticated, authorized staff."
-        actionLabel="Open staff sign-in"
-        onAction={() => router.replace("/staff-portal" as Href)}
-      />
-    );
-  }
-
-  if (!hasCounselorRole) {
-    return (
-      <StaffAccessState
-        icon="shield-checkmark-outline"
-        title="Access denied"
-        body="You are signed in, but this account does not have counselor access. Contact your administrator if you believe this is an error."
-        actionLabel="Back to staff portal"
-        onAction={() => router.replace("/staff-portal" as Href)}
+      <StaffAccountStateScreen
+        state={staffAccountState}
+        role="counselor"
+        initialName={user?.fullName ?? ""}
       />
     );
   }
@@ -147,7 +126,7 @@ export default function CounselorDashboardScreen() {
     );
   }
 
-  const displayName = user?.firstName?.trim() || "Counselor";
+  const displayName = profile?.displayName.trim().split(/\s+/)[0] || user?.firstName?.trim() || "Counselor";
   const isLoadingQueue = queue.status === "LoadingFirstPage";
   const isLoadingMore = queue.status === "LoadingMore";
 
@@ -165,14 +144,6 @@ export default function CounselorDashboardScreen() {
               Review counselling requests and support families with practical guidance.
             </Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
-            onPress={() => void handleSignOut()}
-            style={styles.signOutButton}
-          >
-            <Ionicons name="log-out-outline" size={18} color="#386248" />
-          </Pressable>
         </View>
 
         <View style={styles.metricsRow}>
@@ -192,6 +163,8 @@ export default function CounselorDashboardScreen() {
             icon="call-outline"
           />
         </View>
+
+        <StaffUpcomingAppointments appointments={appointments} />
 
         <View style={styles.safetyNote}>
           <Ionicons name="lock-closed-outline" size={15} color="#4D7A59" />
@@ -333,6 +306,7 @@ export default function CounselorDashboardScreen() {
           Counselor access is restricted to the authorized staff list. Request content is excluded from the audit log.
         </Text>
       </ScrollView>
+      <StaffBottomNavigation role="counselor" selected="home" />
     </SafeAreaView>
   );
 }
@@ -365,16 +339,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 15,
     marginTop: 5,
-  },
-  signOutButton: {
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#DFE8DF",
-    borderRadius: 11,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: "center",
-    width: 38,
   },
   metricsRow: { flexDirection: "row", gap: 8, marginTop: 17 },
   safetyNote: {
